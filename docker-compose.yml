@@ -23,7 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-spidqah}:${POSTGRES_PASSWORD:-spidqah}@db:5432/${POSTGRES_DB:-spidqah}
     ports:
-      - "${WEB_PORT:-8000}:5000"
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:5000"
     depends_on:
       db:
         condition: service_healthy

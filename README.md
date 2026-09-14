@@ -226,25 +226,39 @@ differences, monthly/yearly aggregation, and role-based permissions.
   cat backup_2026-01-01.sql | docker compose exec -T db psql -U <POSTGRES_USER> <POSTGRES_DB>
   ```
 
-## Later deployment to VPS + CloudPanel (not done yet)
+## VPS deployment (automated)
 
-This build stays local-only, as scoped. When ready to deploy:
+`scripts/deploy-vps.sh` is a single, idempotent, root-run script that
+deploys or updates SPIDQAH on a VPS with Docker already installed:
 
-1. Provision/confirm a CloudPanel site pointing at this app's future
-   domain, with a reverse proxy to the `web` container's port.
-2. Set `FLASK_ENV=production`, a strong unique `SECRET_KEY`, strong
-   database credentials, and `SESSION_COOKIE_SECURE=true` once HTTPS is
-   active.
-3. Run `docker compose up -d --build` on the VPS from this project
-   directory (or via CloudPanel's Docker Compose site type, if used).
-4. Point CloudPanel's reverse proxy / Nginx vhost at the host port the
-   `web` service publishes (`WEB_PORT`), with HTTPS (Let's Encrypt via
-   CloudPanel).
-5. Set a real, tested backup schedule for the Postgres volume.
-6. Create the real first Admin user, log in, and immediately: set the
-   correct go-live date under Admin -> Settings, and set bank account
-   opening balances under Banking (each is an audited action).
-7. Do **not** run `flask seed-demo` on the production database.
+```bash
+sudo /opt/spidqah-collections-app/scripts/deploy-vps.sh
+```
+
+It clones (first run) or fast-forward-pulls `main` into
+`/opt/spidqah-collections-app`, generates a production `.env` with
+strong random secrets on first run only (and always preserves an
+existing one on later runs), builds and starts the containers, waits
+for both to report healthy, and verifies the app answers on
+`127.0.0.1:8000` (never `0.0.0.0`) with PostgreSQL never published. It
+never touches any other container, port 5000, CloudPanel, Nginx, or
+runs any global Docker cleanup, and it refuses to continue (with a
+clear error, no false "success") if a preflight or verification check
+fails. Re-running it later is the update procedure: it pulls the
+latest `main`, rebuilds, migrates, and restarts without ever resetting
+the database or regenerating secrets.
+
+After a successful run, remaining manual steps to go live:
+
+1. Point a CloudPanel site/reverse proxy at `127.0.0.1:8000` with HTTPS
+   (Let's Encrypt via CloudPanel) - not done by the script on purpose.
+2. Set a real, tested backup schedule for the Postgres volume (see
+   Backup considerations above).
+3. Log in with the Admin credentials the script prints on first run,
+   change the password immediately, then set the correct go-live date
+   under Admin -> Settings and bank account opening balances under
+   Banking (each is an audited action).
+4. Do **not** run `flask seed-demo` on the production database.
 
 ## Historical data import (spreadsheet)
 
