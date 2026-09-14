@@ -1,7 +1,7 @@
 import json
 from decimal import Decimal
 
-from flask import request
+from flask import request, has_request_context
 from flask_login import current_user
 
 from app.extensions import db
@@ -32,7 +32,7 @@ def log_audit(entity_type, entity_id, action: AuditAction, before=None, after=No
         after_json=_dump(after),
         reason=reason,
         user_id=getattr(user, "id", None),
-        ip_address=request.remote_addr if request else None,
+        ip_address=request.remote_addr if has_request_context() else None,
     )
     db.session.add(entry)
     return entry

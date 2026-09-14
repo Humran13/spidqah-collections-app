@@ -262,20 +262,49 @@ After a successful run, remaining manual steps to go live:
 
 ## Historical data import (spreadsheet)
 
-The existing `SPIDQAH 2026.xlsx` in this folder contains a `MUKULULO`
-sheet and a `FRI & SUN` sheet, each a running ledger (brought-forward /
-received / carried-forward balances per entry, not clean monthly
-totals) alongside several unrelated inventory sheets. Because the
-figures are a running ledger rather than ready-made monthly totals, and
-because turning it into official monthly totals requires judgment calls
-this app should not make silently, **no automatic import of this file
-was performed**.
+The private ledger spreadsheet (e.g. `SPIDQAH 2026.xlsx`, gitignored -
+see `.gitignore`, never committed) contains a `MUKULULO` sheet and a
+`FRI & SUN` sheet, each a running ledger (brought-forward / received /
+carried-forward balances per entry) alongside several unrelated
+inventory sheets. The app never reads this file directly and it never
+needs to exist on the VPS - instead there is a two-step, human-reviewed
+workflow that keeps the spreadsheet local while only ever writing
+small, aggregated **monthly totals** into the database:
 
-The architecture supports safe, controlled entry of official historical
-totals: Admin -> Historical Official Totals -> Add Month, one month at
-a time, each locked once confirmed and fully audited if later edited.
+1. **Locally**, parse and validate the spreadsheet into a JSON report:
+   ```bash
+   python scripts/parse_official_history.py "SPIDQAH 2026.xlsx" \
+       --start 2026-01-01 --go-live 2026-09-18 > report.json
+   ```
+   This groups the `MUKULULO` sheet's `RECEIVED` column by calendar
+   month (the separate `KIKUMI 100` mini-ledger is intentionally never
+   read - its amounts are already folded into `RECEIVED`, so reading it
+   too would double-count Mukululo), and groups the `FRI & SUN` sheet's
+   `RECEIVED` column by month **and** by the trailing F/S day-letter on
+   each row's date label. It cross-checks Friday+Sunday=Combined and
+   Mukululo+Combined=Overall for every month, and refuses to guess: any
+   row with a non-zero `RECEIVED` it cannot confidently date/classify
+   is reported under `ambiguous_received_rows` and excluded rather than
+   estimated. It also computes a separate ISSUED/outflow reconciliation
+   (informational only - never used to reduce the official collected
+   total or invent a bank deposit).
+
+2. Take just the report's `payload_for_import` object (nine numbers per
+   month - no contributor data, no spreadsheet content) and feed it to
+   the safe, idempotent importer, dry-run first:
+   ```bash
+   cat payload.json | flask import-official-history --dry-run
+   cat payload.json | flask import-official-history --apply
+   ```
+   Each month becomes a locked `HistoricalOfficialMonthlyTotal` row
+   (Admin -> Historical Official Totals shows the same rows you'd get
+   from entering them by hand there). Re-running the same payload is a
+   safe no-op; if a month is already locked with **different** values,
+   the importer refuses to touch anything and reports the conflict -
+   applying is all-or-nothing across the whole payload, never partial.
+   See `app/services/history_import.py` for the exact rules.
+
 Individual historical contributor detail (from the physical books) is
 entered separately later via Data Entry -> Historical Contributor
-Entry, and never affects the locked official totals. If in the future a
-bulk-import screen is added (upload -> preview -> dry run -> confirm),
-it should write into these same two tables rather than bypassing them.
+Entry, and never affects these locked official totals - see
+`app/services/totals.py` for the cutover math between the two.
