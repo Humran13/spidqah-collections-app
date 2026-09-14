@@ -1,0 +1,49 @@
+:root {
+  --spidqah-green: #1f4e3d;
+}
+
+body {
+  background-color: #f5f7f6;
+}
+
+.navbar.bg-success-emphasis {
+  background-color: var(--spidqah-green) !important;
+}
+
+.btn-lg, .form-control-lg, .form-select-lg {
+  font-size: 1.05rem;
+}
+
+.card {
+  border: none;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.stat-card .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.quick-entry-btn {
+  min-height: 3.25rem;
+  font-size: 1.1rem;
+}
+
+.table-responsive {
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+@media (max-width: 576px) {
+  .container-fluid {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  h1, .h1 { font-size: 1.5rem; }
+  h2, .h2 { font-size: 1.25rem; }
+}
+
+.running-total {
+  font-variant-numeric: tabular-nums;
+}

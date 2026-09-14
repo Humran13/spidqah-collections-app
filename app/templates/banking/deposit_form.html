@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Record Deposit{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    {% if exceeds %}
+    <div class="alert alert-danger">This exceeds the UGX {{ available | ugx }} currently awaiting banking. Tick override below with a reason if this is intentional (e.g. correcting a prior shortfall).</div>
+    {% endif %}
+    <div class="card">
+      <div class="card-body">
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.deposit_date) }}
+          {{ field(form.fund) }}
+          {{ field(form.bank_account_id) }}
+          {{ field(form.amount) }}
+          {{ field(form.reference) }}
+          {{ field(form.slip_reference) }}
+          {{ field(form.notes) }}
+          {{ field(form.override) }}
+          {{ field(form.override_reason) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save deposit</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

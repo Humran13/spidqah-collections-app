@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+instance/
+.DS_Store
+*.log
+htmlcov/
+.coverage
+
+# Private/operational source data - never publish to GitHub.
+SPIDQAH*.xlsx
+*.xlsx
+*.xls
+contributors-list.txt
+*deposit-slip*
+*backup*.sql
+*.sql
+*.dump
+/backups/
+/uploads/

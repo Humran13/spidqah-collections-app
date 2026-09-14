@@ -1,0 +1,6 @@
+<form class="d-flex flex-wrap gap-2 mb-3" method="get">
+  <input type="date" name="date_from" value="{{ start.isoformat() }}" class="form-control w-auto">
+  <input type="date" name="date_to" value="{{ end.isoformat() }}" class="form-control w-auto">
+  <button type="submit" class="btn btn-outline-secondary">Filter</button>
+  {% if csv_url %}<a href="{{ csv_url }}&date_from={{ start.isoformat() }}&date_to={{ end.isoformat() }}" class="btn btn-outline-success">Export CSV</a>{% endif %}
+</form>

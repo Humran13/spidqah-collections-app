@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Void entry{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-1">Void entry - {{ txn.contributor.name }}</h1>
+        <p class="text-muted">{{ txn.date.strftime('%d %b %Y') }} &middot; {{ txn.collection_type.value }} &middot; {{ txn.amount | ugx }}</p>
+        <p>This transaction will be marked VOID and excluded from all totals. It stays visible in the audit history - it is never deleted.</p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.reason) }}
+          <button type="submit" class="btn btn-danger btn-lg w-100">Void this entry</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

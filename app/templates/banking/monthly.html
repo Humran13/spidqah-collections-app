@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Monthly Banking{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Monthly Banking View - {{ year }}</h1>
+  <form method="get" class="d-flex gap-2">
+    <select name="year" class="form-select" onchange="this.form.submit()">
+      {% for y in range(2024, 2031) %}
+        <option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="alert alert-secondary">Overall amount awaiting banking across all months on record: <strong>{{ overall_awaiting | ugx }}</strong></div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Month</th>
+          <th class="text-end">Mukululo Collected</th><th class="text-end">Mukululo Deposited</th><th class="text-end">Mukululo Remaining</th>
+          <th class="text-end">F&amp;S Collected</th><th class="text-end">F&amp;S Deposited</th><th class="text-end">F&amp;S Remaining</th>
+          <th class="text-end">Total Remaining</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.month_name }}</td>
+          <td class="text-end">{{ row.mukululo_collected | ugx }}</td>
+          <td class="text-end">{{ row.mukululo_deposited | ugx }}</td>
+          <td class="text-end {{ 'text-danger' if row.mukululo_remaining > 0 }}">{{ row.mukululo_remaining | ugx }}</td>
+          <td class="text-end">{{ row.fs_collected | ugx }}</td>
+          <td class="text-end">{{ row.fs_deposited | ugx }}</td>
+          <td class="text-end {{ 'text-danger' if row.fs_remaining > 0 }}">{{ row.fs_remaining | ugx }}</td>
+          <td class="text-end fw-bold">{{ row.total_remaining | ugx }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

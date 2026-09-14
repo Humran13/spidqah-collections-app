@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Chikumi 100 Report{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Chikumi 100 Report</h1>
+<p class="text-muted">Chikumi 100 is a contributor within the Mukululo fund, not a separate fund. This report is informational and its total is already included inside Mukululo totals elsewhere.</p>
+{% include "reports/_date_range_form.html" %}
+<div class="alert alert-secondary">Total for period: <strong>{{ total | ugx }}</strong></div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Month</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for row in monthly %}
+        <tr><td>{{ row.year }}-{{ '%02d' % row.month }}</td><td class="text-end">{{ row.total | ugx }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="text-center text-muted py-4">No entries in this range.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

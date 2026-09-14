@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Annual Contributor Ranking{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Annual Contributor Ranking - {{ year }}</h1>
+</div>
+<form method="get" class="d-flex flex-wrap gap-2 mb-3">
+  <select name="year" class="form-select w-auto" onchange="this.form.submit()">
+    {% for y in range(2024, 2031) %}<option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>{% endfor %}
+  </select>
+  <select name="fund" class="form-select w-auto" onchange="this.form.submit()">
+    <option value="ALL" {{ "selected" if fund_filter == 'ALL' }}>All</option>
+    <option value="MUKULULO" {{ "selected" if fund_filter == 'MUKULULO' }}>Mukululo only</option>
+    <option value="FRIDAY_SUNDAY" {{ "selected" if fund_filter == 'FRIDAY_SUNDAY' }}>Friday &amp; Sunday</option>
+  </select>
+  <select name="include_zero" class="form-select w-auto" onchange="this.form.submit()">
+    <option value="1" {{ "selected" if include_zero }}>Include zero contributions</option>
+    <option value="0" {{ "selected" if not include_zero }}>Only contributions &gt; 0</option>
+  </select>
+  <a href="{{ url_for('reports.ranking', year=year, fund=fund_filter, include_zero='1' if include_zero else '0', format='csv') }}" class="btn btn-outline-success">Export CSV</a>
+</form>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>#</th><th>Contributor</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><a href="{{ url_for('contributors.profile', contributor_id=r.contributor.id) }}">{{ r.contributor.name }}</a></td>
+          <td class="text-end">{{ r.total | ugx }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="text-center text-muted py-4">No data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

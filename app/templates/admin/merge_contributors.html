@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Merge Contributors{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-3">Merge Duplicate Contributors</h1>
+        <p class="text-muted">All transaction history from the duplicate is moved to the kept contributor. This cannot be undone automatically - double-check before confirming.</p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.source_id) }}
+          {{ field(form.target_id) }}
+          <button type="submit" class="btn btn-danger btn-lg w-100">Merge</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

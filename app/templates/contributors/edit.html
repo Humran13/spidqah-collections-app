@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Edit Contributor{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-3">Edit {{ contributor.name }}</h1>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.name) }}
+          {{ field(form.phone) }}
+          {{ field(form.notes) }}
+          {{ field(form.active) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

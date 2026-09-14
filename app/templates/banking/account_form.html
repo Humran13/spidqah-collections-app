@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Edit Bank Account{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-3">{{ account.name }}</h1>
+        <p class="text-muted">Setting the opening balance is a controlled, audited action.</p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.name) }}
+          {{ field(form.opening_balance) }}
+          {{ field(form.opening_balance_date) }}
+          {{ field(form.notes) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Banking{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Banking Overview</h1>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('banking.new_deposit') }}" class="btn btn-success">Record Deposit</a>
+    <a href="{{ url_for('banking.deposits_list') }}" class="btn btn-outline-secondary">All Deposits</a>
+    <a href="{{ url_for('banking.reconciliation_list') }}" class="btn btn-outline-secondary">Reconciliation</a>
+    <a href="{{ url_for('banking.monthly_view') }}" class="btn btn-outline-secondary">Monthly View</a>
+    {% if current_user.role.value == 'ADMIN' %}
+    <a href="{{ url_for('banking.new_adjustment') }}" class="btn btn-outline-secondary">Adjustment</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body"><div class="text-muted small">Mukululo Awaiting Banking</div><div class="fs-5 fw-bold {{ 'text-danger' if fund_awaiting.MUKULULO > 0 }}">{{ fund_awaiting.MUKULULO | ugx }}</div></div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card"><div class="card-body"><div class="text-muted small">Friday &amp; Sunday Awaiting Banking</div><div class="fs-5 fw-bold {{ 'text-danger' if fund_awaiting.FRIDAY_SUNDAY > 0 }}">{{ fund_awaiting.FRIDAY_SUNDAY | ugx }}</div></div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  {% for row in account_rows %}
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold">{{ row.account.name }}</div>
+            <div class="text-muted small">Owner fund: {{ row.account.fund_type.value.replace('_', ' & ').title() }}</div>
+          </div>
+          {% if current_user.role.value == 'ADMIN' %}
+          <a href="{{ url_for('banking.edit_account', account_id=row.account.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+          {% endif %}
+        </div>
+        <div class="fs-4 fw-bold mt-2">{{ row.estimated_balance | ugx }}</div>
+        <div class="text-muted small">Estimated balance (opening + deposits + adjustments)</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

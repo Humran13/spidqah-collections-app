@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Historical Contributor Entry{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="alert alert-info">
+      <strong>Historical Contributor Entry.</strong> These entries reconstruct contributor history for
+      profiles, statements and rankings. They do <strong>not</strong> modify the locked historical
+      official financial totals (go-live date: {{ go_live_date.strftime('%d %b %Y') }}).
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.date) }}
+          {{ field(form.collection_type) }}
+          {{ field(form.contributor_name) }}
+          {{ field(form.amount) }}
+          {{ field(form.note) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save historical entry</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

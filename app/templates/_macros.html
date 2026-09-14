@@ -1,0 +1,16 @@
+{% macro field(f, autofocus=False, placeholder=None) %}
+<div class="mb-3">
+  {{ f.label(class_="form-label fw-semibold") }}
+  {% if f.type == 'BooleanField' %}
+    <div class="form-check">
+      {{ f(class_="form-check-input", **({"autofocus": True} if autofocus else {})) }}
+    </div>
+  {% else %}
+    {{ f(class_="form-control form-control-lg" if f.type in ['StringField','PasswordField','DateField','IntegerField'] else "form-select form-select-lg" if f.type == 'SelectField' else "form-control", placeholder=placeholder, **({"autofocus": True} if autofocus else {})) }}
+  {% endif %}
+  {% for error in f.errors %}
+    <div class="text-danger small mt-1">{{ error }}</div>
+  {% endfor %}
+{% endmacro %}
+
+{% macro money(amount) %}{{ amount | ugx }}{% endmacro %}

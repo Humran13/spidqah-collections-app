@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}User{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-3">{{ "Edit User" if user else "Add User" }}</h1>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.username) }}
+          {{ field(form.display_name) }}
+          {{ field(form.email) }}
+          {{ field(form.role) }}
+          {{ field(form.active) }}
+          {{ field(form.password) }}
+          <p class="text-muted small">Leave password blank {{ "to keep the current one" if user else "to auto-generate a temporary password shown after saving" }}.</p>
+          <button type="submit" class="btn btn-success btn-lg w-100">Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

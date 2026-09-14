@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Bank Reconciliation Report{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Bank Reconciliation Report</h1>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Date</th><th>Account</th><th class="text-end">Estimated</th><th class="text-end">Actual</th><th class="text-end">Difference</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for r in reconciliations %}
+        <tr><td>{{ r.balance_date.strftime('%d %b %Y') }}</td><td>{{ r.bank_account.name }}</td>
+          <td class="text-end">{{ r.estimated_balance_snapshot | ugx }}</td><td class="text-end">{{ r.actual_balance | ugx }}</td>
+          <td class="text-end">{{ r.difference | ugx }}</td>
+          <td><span class="badge text-bg-{{ 'success' if r.status.value == 'RECONCILED' else 'warning' }}">{{ r.status.value }}</span></td></tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No reconciliations recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

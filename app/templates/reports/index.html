@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Reports</h1>
+<div class="list-group">
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.contributor_report') }}">Contributor Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.collection_report', fund_key='mukululo') }}">Mukululo Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.collection_report', fund_key='friday') }}">Friday Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.collection_report', fund_key='sunday') }}">Sunday Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.collection_report', fund_key='friday_sunday') }}">Friday &amp; Sunday Combined Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.chikumi100_report') }}">Chikumi 100 Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.monthly_collection_report') }}">Monthly Collection Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.banking_report') }}">Banking Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.awaiting_banking_report') }}">Awaiting Banking Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.bank_reconciliation_report') }}">Bank Reconciliation Report</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.annual_summary') }}">Annual Summary</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.ranking') }}">Annual Contributor Ranking</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.statement') }}">Individual Annual Statement</a>
+</div>
+{% endblock %}

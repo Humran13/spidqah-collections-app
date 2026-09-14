@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Daily Close{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Daily Close / Reconciliation - {{ selected_date.strftime('%d %b %Y') }}</h1>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-5">
+    <div class="card">
+      <div class="card-header bg-white fw-semibold">System Totals</div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between border-bottom py-2"><span>Mukululo</span><strong>{{ totals.MUKULULO | ugx }}</strong></div>
+        <div class="d-flex justify-content-between border-bottom py-2"><span>Friday</span><strong>{{ totals.FRIDAY | ugx }}</strong></div>
+        <div class="d-flex justify-content-between border-bottom py-2"><span>Sunday</span><strong>{{ totals.SUNDAY | ugx }}</strong></div>
+        <div class="d-flex justify-content-between py-2"><span class="fw-bold">Grand total</span><strong class="fs-5">{{ totals.OVERALL | ugx }}</strong></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-7">
+    <div class="card">
+      <div class="card-body">
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.date) }}
+          {{ field(form.physical_cash_counted) }}
+          {{ field(form.notes) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save daily close</button>
+        </form>
+        {% if existing %}
+        <hr>
+        <p class="mb-1">Status: <span class="badge text-bg-{{ 'success' if existing.status.value == 'BALANCED' else ('danger' if existing.status.value == 'SHORT' else 'warning') }}">{{ existing.status.value }}</span></p>
+        <p class="mb-0">Difference: {{ existing.difference | ugx }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

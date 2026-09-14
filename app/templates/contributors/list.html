@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Contributors{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Contributors</h1>
+  {% if current_user.role.value in ['ADMIN', 'DATA_ENTRY'] %}
+  <a href="{{ url_for('contributors.new_contributor') }}" class="btn btn-success"><i class="bi bi-person-plus"></i> Add Contributor</a>
+  {% endif %}
+</div>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-8 col-md-4">
+    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Search name...">
+  </div>
+  <div class="col-4 col-md-3">
+    <div class="form-check pt-2">
+      <input type="checkbox" name="show_inactive" value="1" class="form-check-input" id="show_inactive" {{ "checked" if show_inactive }} onchange="this.form.submit()">
+      <label class="form-check-label" for="show_inactive">Show inactive</label>
+    </div>
+  </div>
+  <div class="col-12 col-md-2">
+    <button type="submit" class="btn btn-outline-secondary w-100">Search</button>
+  </div>
+</form>
+
+<div class="card">
+  <div class="list-group list-group-flush">
+    {% for c in contributors %}
+      <a href="{{ url_for('contributors.profile', contributor_id=c.id) }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+        <span>{{ c.name }}{% if not c.active %} <span class="badge text-bg-secondary">inactive</span>{% endif %}</span>
+        <i class="bi bi-chevron-right text-muted"></i>
+      </a>
+    {% else %}
+      <div class="list-group-item text-muted">No contributors found.</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

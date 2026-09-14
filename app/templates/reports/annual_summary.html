@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Annual Summary{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Annual Summary - {{ year }}</h1>
+  <form method="get" class="d-flex gap-2">
+    <select name="year" class="form-select" onchange="this.form.submit()">
+      {% for y in range(2024, 2031) %}<option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Mukululo</div><div class="fs-5 fw-bold">{{ totals.mukululo | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Friday</div><div class="fs-5 fw-bold">{{ totals.friday | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Sunday</div><div class="fs-5 fw-bold">{{ totals.sunday | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Overall Collected</div><div class="fs-5 fw-bold">{{ totals.total | ugx }}</div></div></div></div>
+</div>
+<div class="alert alert-secondary">Total deposited in {{ year }}: <strong>{{ deposited_total | ugx }}</strong></div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Month</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr><td>{{ ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][r.month] }}</td>
+          <td class="text-end">{{ r.mukululo | ugx }}</td><td class="text-end">{{ r.friday | ugx }}</td>
+          <td class="text-end">{{ r.sunday | ugx }}</td><td class="text-end fw-bold">{{ r.total | ugx }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

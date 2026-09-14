@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-3">App Settings</h1>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.org_name) }}
+          {{ field(form.go_live_date) }}
+          <p class="text-muted small">Transactions dated on or after the go-live date are the live financial source of truth. Before it, locked historical official totals apply.</p>
+          <button type="submit" class="btn btn-success btn-lg w-100">Save settings</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

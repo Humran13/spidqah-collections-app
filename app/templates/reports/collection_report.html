@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} Report{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">{{ title }} Report</h1>
+{% set csv_url = url_for('reports.collection_report', fund_key=fund_key, format='csv') %}
+{% include "reports/_date_range_form.html" %}
+<div class="alert alert-secondary">Total for period: <strong>{{ total | ugx }}</strong></div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Date</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for d, amt in daily_rows %}
+        <tr><td>{{ d.strftime('%d %b %Y') }}</td><td class="text-end">{{ amt | ugx }}</td></tr>
+        {% else %}
+        <tr><td colspan="2" class="text-center text-muted py-4">No entries in this range.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

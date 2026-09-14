@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Annual Contributor Statement{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Individual Annual Statement</h1>
+<form method="get" class="d-flex flex-wrap gap-2 mb-3">
+  <select name="year" class="form-select w-auto" onchange="this.form.submit()">
+    {% for y in range(2024, 2031) %}<option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>{% endfor %}
+  </select>
+  <select name="contributor_id" class="form-select" onchange="this.form.submit()">
+    <option value="">Select contributor...</option>
+    {% for c in contributors %}
+      <option value="{{ c.id }}" {{ "selected" if contributor and c.id == contributor.id }}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  {% if contributor %}
+  <a href="{{ url_for('reports.statement_pdf', year=year, contributor_id=contributor.id) }}" class="btn btn-outline-success">Download PDF</a>
+  {% endif %}
+  <a href="{{ url_for('reports.statement_batch_pdf', year=year) }}" class="btn btn-outline-secondary">Batch PDF (all contributors)</a>
+</form>
+
+{% if contributor and rows %}
+<div class="card">
+  <div class="card-header bg-white fw-semibold">{{ contributor.name }} - {{ year }}</div>
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead class="table-light"><tr><th>Month</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% set ns = namespace(mukululo=0, friday=0, sunday=0, total=0) %}
+        {% for r in rows %}
+        <tr><td>{{ ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][r.month] }}</td>
+          <td class="text-end">{{ r.mukululo | ugx }}</td><td class="text-end">{{ r.friday | ugx }}</td>
+          <td class="text-end">{{ r.sunday | ugx }}</td><td class="text-end fw-bold">{{ r.total | ugx }}</td></tr>
+        {% set ns.mukululo = ns.mukululo + r.mukululo %}
+        {% set ns.friday = ns.friday + r.friday %}
+        {% set ns.sunday = ns.sunday + r.sunday %}
+        {% set ns.total = ns.total + r.total %}
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-bold">
+        <tr><td>YEAR TOTAL</td><td class="text-end">{{ ns.mukululo | ugx }}</td><td class="text-end">{{ ns.friday | ugx }}</td>
+          <td class="text-end">{{ ns.sunday | ugx }}</td><td class="text-end">{{ ns.total | ugx }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

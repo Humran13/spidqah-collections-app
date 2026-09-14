@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ contributor.name }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h1 class="h4 mb-0">{{ contributor.name }}</h1>
+    {% if contributor.phone %}<div class="text-muted small">{{ contributor.phone }}</div>{% endif %}
+    {% if not contributor.active %}<span class="badge text-bg-secondary">inactive</span>{% endif %}
+  </div>
+  <div class="d-flex gap-2">
+    {% if current_user.role.value in ['ADMIN', 'DATA_ENTRY'] %}
+    <a href="{{ url_for('contributors.edit_contributor', contributor_id=contributor.id) }}" class="btn btn-outline-secondary">Edit</a>
+    {% endif %}
+    <a href="{{ url_for('reports.statement', year=year, contributor_id=contributor.id) }}" class="btn btn-outline-success">Annual Statement</a>
+  </div>
+</div>
+
+<form class="mb-3" method="get">
+  <select name="year" class="form-select w-auto d-inline-block" onchange="this.form.submit()">
+    {% for y in range(2024, 2031) %}
+      <option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Mukululo {{ year }}</div><div class="fs-5 fw-bold">{{ mukululo_total | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Friday {{ year }}</div><div class="fs-5 fw-bold">{{ friday_total | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Sunday {{ year }}</div><div class="fs-5 fw-bold">{{ sunday_total | ugx }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Overall {{ year }}</div><div class="fs-5 fw-bold">{{ overall_total | ugx }}</div></div></div></div>
+</div>
+<p class="text-muted small">Contributor-detail totals include both live entries and reconstructed historical back-entries; they are informational and separate from locked official accounting totals.</p>
+
+<div class="card">
+  <div class="card-header bg-white fw-semibold">Transaction History</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Date</th><th>Collection</th><th class="text-end">Amount</th><th>Note</th><th>Entered by</th></tr></thead>
+      <tbody>
+        {% for t in transactions %}
+        <tr>
+          <td>{{ t.date.strftime('%d %b %Y') }}</td>
+          <td><span class="badge text-bg-light">{{ t.collection_type.value }}</span>{% if t.is_historical_backentry %} <span class="badge text-bg-info">historical</span>{% endif %}</td>
+          <td class="text-end">{{ t.amount | ugx }}</td>
+          <td class="text-muted small">{{ t.note or "" }}</td>
+          <td class="text-muted small">{{ t.created_by.display_name if t.created_by }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No transactions for {{ year }}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

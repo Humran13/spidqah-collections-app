@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Historical Official Totals{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Historical Official Monthly Totals</h1>
+  <a href="{{ url_for('admin.new_historical_total') }}" class="btn btn-success">Add Month</a>
+</div>
+<p class="text-muted">These are the locked, official accounting figures for months before go-live. Data Entry users cannot change them once locked.</p>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Year</th><th>Month</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">F&amp;S Combined</th><th>Locked</th><th></th></tr></thead>
+      <tbody>
+        {% for t in totals %}
+        <tr>
+          <td>{{ t.year }}</td>
+          <td>{{ t.month }}</td>
+          <td class="text-end">{{ t.mukululo_total | ugx }}</td>
+          <td class="text-end">{{ t.friday_total | ugx }}</td>
+          <td class="text-end">{{ t.sunday_total | ugx }}</td>
+          <td class="text-end">{{ t.friday_sunday_combined_total | ugx }}</td>
+          <td>{% if t.locked %}<span class="badge text-bg-success">locked</span>{% else %}<span class="badge text-bg-warning">unlocked</span>{% endif %}</td>
+          <td class="text-end">
+            {% if t.locked %}
+              <a href="{{ url_for('admin.unlock_historical_total', total_id=t.id) }}" class="btn btn-sm btn-outline-warning">Unlock</a>
+            {% else %}
+              <a href="{{ url_for('admin.edit_historical_total', total_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <form method="post" action="{{ url_for('admin.lock_historical_total', total_id=t.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-success">Lock</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">No historical totals entered yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Banking Report{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">Banking Report</h1>
+{% set csv_url = url_for('reports.banking_report', format='csv') %}
+{% include "reports/_date_range_form.html" %}
+<div class="alert alert-secondary">Total deposited in period: <strong>{{ total | ugx }}</strong></div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Date</th><th>Fund</th><th>Account</th><th class="text-end">Amount</th><th>Reference</th></tr></thead>
+      <tbody>
+        {% for d in deposits %}
+        <tr><td>{{ d.deposit_date.strftime('%d %b %Y') }}</td><td>{{ d.fund.value.replace('_',' & ').title() }}</td>
+          <td>{{ d.bank_account.name }}</td><td class="text-end">{{ d.amount | ugx }}</td><td class="small text-muted">{{ d.reference or "" }}</td></tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No deposits in this range.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

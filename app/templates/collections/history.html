@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Collections - {{ selected_date.strftime('%d %b %Y') }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Entries for {{ selected_date.strftime('%d %b %Y') }}</h1>
+  <form class="d-flex gap-2" method="get">
+    <input type="date" name="date" value="{{ selected_date.isoformat() }}" class="form-control" onchange="this.form.submit()">
+    <select name="type" class="form-select" onchange="this.form.submit()">
+      <option value="">All types</option>
+      {% for ct in ['MUKULULO', 'FRIDAY', 'SUNDAY'] %}
+        <option value="{{ ct }}" {{ "selected" if ct == collection_type }}>{{ ct.title() }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr><th>Contributor</th><th>Type</th><th class="text-end">Amount</th><th>Note</th><th>Entered by</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for t in transactions %}
+        <tr class="{{ 'table-secondary text-decoration-line-through' if t.status.value == 'VOID' }}">
+          <td>{{ t.contributor.name }}</td>
+          <td><span class="badge text-bg-light">{{ t.collection_type.value }}</span>{% if t.is_historical_backentry %} <span class="badge text-bg-info">historical</span>{% endif %}</td>
+          <td class="text-end">{{ t.amount | ugx }}</td>
+          <td class="text-muted small">{{ t.note or "" }}</td>
+          <td class="text-muted small">{{ t.created_by.display_name if t.created_by }}</td>
+          <td>{{ t.status.value }}</td>
+          <td class="text-end">
+            {% if can_edit and t.status.value == 'ACTIVE' %}
+              <a href="{{ url_for('collections.edit_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+              <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Void</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No entries for this date.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

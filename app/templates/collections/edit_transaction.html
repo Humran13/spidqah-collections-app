@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}Edit entry{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-1">Edit entry - {{ txn.contributor.name }}</h1>
+        <p class="text-muted">All edits are recorded in the audit log with a reason.</p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          {{ field(form.date) }}
+          {{ field(form.collection_type) }}
+          {{ field(form.amount) }}
+          {{ field(form.note) }}
+          {{ field(form.reason) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Monthly Collection Report{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <h1 class="h4 mb-0">Monthly Collection Report - {{ year }}</h1>
+  <form method="get" class="d-flex gap-2">
+    <select name="year" class="form-select" onchange="this.form.submit()">
+      {% for y in range(2024, 2031) %}<option value="{{ y }}" {{ "selected" if y == year }}>{{ y }}</option>{% endfor %}
+    </select>
+    <a href="{{ url_for('reports.monthly_collection_report', year=year, format='csv') }}" class="btn btn-outline-success">Export CSV</a>
+  </form>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Month</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr><td>{{ ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][r.month] }}</td>
+          <td class="text-end">{{ r.mukululo | ugx }}</td><td class="text-end">{{ r.friday | ugx }}</td>
+          <td class="text-end">{{ r.sunday | ugx }}</td><td class="text-end fw-bold">{{ r.total | ugx }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
