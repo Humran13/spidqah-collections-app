@@ -5,7 +5,7 @@
 <div class="row justify-content-center">
   <div class="col-12 col-md-7">
     {% if exceeds %}
-    <div class="alert alert-danger">This exceeds the UGX {{ available | ugx }} currently awaiting banking. Tick override below with a reason if this is intentional (e.g. correcting a prior shortfall).</div>
+    <div class="alert alert-danger">This exceeds the {{ available | ugx }} currently awaiting banking. Tick override below with a reason if this is intentional (e.g. correcting a prior shortfall).</div>
     {% endif %}
     <div class="card">
       <div class="card-body">

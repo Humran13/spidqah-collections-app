@@ -84,12 +84,12 @@
       <div class="card-header bg-white fw-semibold">Recent Collection Entries</div>
       <div class="list-group list-group-flush">
         {% for t in recent_transactions %}
-          <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
+          <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="min-w-0">
               <div>{{ t.contributor.name }} <span class="badge text-bg-light">{{ t.collection_type.value }}</span></div>
               <div class="small text-muted">{{ t.date.strftime('%d %b %Y') }}{% if t.is_historical_backentry %} &middot; historical{% endif %}</div>
             </div>
-            <div class="fw-semibold">{{ t.amount | ugx }}</div>
+            <div class="fw-semibold text-nowrap">{{ t.amount | ugx }}</div>
           </div>
         {% else %}
           <div class="list-group-item text-muted">No entries yet.</div>
@@ -102,12 +102,12 @@
       <div class="card-header bg-white fw-semibold">Recent Deposits</div>
       <div class="list-group list-group-flush">
         {% for d in recent_deposits %}
-          <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
+          <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="min-w-0">
               <div>{{ d.fund.value.replace('_', ' & ').title() }} &rarr; {{ d.bank_account.name }}</div>
               <div class="small text-muted">{{ d.deposit_date.strftime('%d %b %Y') }}</div>
             </div>
-            <div class="fw-semibold">{{ d.amount | ugx }}</div>
+            <div class="fw-semibold text-nowrap">{{ d.amount | ugx }}</div>
           </div>
         {% else %}
           <div class="list-group-item text-muted">No deposits yet.</div>

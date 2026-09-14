@@ -3,6 +3,15 @@
 {% block content %}
 <h1 class="h4 mb-3">Enter Collection</h1>
 
+<!-- Compact glanceable totals, mobile only - the full detail card lives
+     further down (and is the only totals view on desktop, d-lg block). -->
+<div class="mobile-totals-strip d-lg-none">
+  <div class="mts-pill"><div class="mts-label">Mukululo</div><div class="mts-value" id="m-total-mukululo">{{ totals.MUKULULO | ugx }}</div></div>
+  <div class="mts-pill"><div class="mts-label">Friday</div><div class="mts-value" id="m-total-friday">{{ totals.FRIDAY | ugx }}</div></div>
+  <div class="mts-pill"><div class="mts-label">Sunday</div><div class="mts-value" id="m-total-sunday">{{ totals.SUNDAY | ugx }}</div></div>
+  <div class="mts-pill"><div class="mts-label">Overall</div><div class="mts-value" id="m-total-overall">{{ totals.OVERALL | ugx }}</div></div>
+</div>
+
 <div class="row g-3">
   <div class="col-12 col-lg-7">
     <div class="card">

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
   <h1 class="h4 mb-0">Entries for {{ selected_date.strftime('%d %b %Y') }}</h1>
-  <form class="d-flex gap-2" method="get">
+  <form class="d-flex flex-wrap gap-2" method="get">
     <input type="date" name="date" value="{{ selected_date.isoformat() }}" class="form-control" onchange="this.form.submit()">
     <select name="type" class="form-select" onchange="this.form.submit()">
       <option value="">All types</option>
@@ -14,7 +14,36 @@
   </form>
 </div>
 
-<div class="card">
+<!-- Phone/tablet: one card per entry, no horizontal scrolling needed. -->
+<div class="d-lg-none">
+  {% for t in transactions %}
+    <div class="mobile-row-card {{ 'opacity-50' if t.status.value == 'VOID' }}">
+      <div class="mrc-top">
+        <div>
+          <div class="mrc-title">{{ t.contributor.name }}{% if t.status.value == 'VOID' %} <span class="badge text-bg-secondary">VOID</span>{% endif %}</div>
+          <div class="mrc-meta">
+            <span class="badge text-bg-light">{{ t.collection_type.value }}</span>
+            {% if t.is_historical_backentry %} <span class="badge text-bg-info">historical</span>{% endif %}
+          </div>
+        </div>
+        <div class="mrc-amount">{{ t.amount | ugx }}</div>
+      </div>
+      {% if t.note %}<div class="mrc-meta">{{ t.note }}</div>{% endif %}
+      <div class="mrc-meta">Entered by {{ t.created_by.display_name if t.created_by else "-" }}</div>
+      {% if can_edit and t.status.value == 'ACTIVE' %}
+        <div class="mrc-actions">
+          <a href="{{ url_for('collections.edit_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+          <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Void</a>
+        </div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-4">No entries for this date.</div>
+  {% endfor %}
+</div>
+
+<!-- Desktop: full table, unchanged. -->
+<div class="card d-none d-lg-block">
   <div class="table-responsive">
     <table class="table table-hover mb-0 align-middle">
       <thead class="table-light">

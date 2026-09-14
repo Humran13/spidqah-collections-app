@@ -2,8 +2,17 @@
   --spidqah-green: #1f4e3d;
 }
 
+html {
+  /* Belt-and-braces alongside the 16px input rule below: stops iOS
+     Safari's auto-zoom-on-focus without disabling user pinch-zoom
+     (the viewport meta tag intentionally allows pinch-zoom). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background-color: #f5f7f6;
+  overflow-x: hidden;
 }
 
 .navbar.bg-success-emphasis {
@@ -23,6 +32,7 @@ body {
 .stat-card .stat-value {
   font-size: 1.5rem;
   font-weight: 700;
+  word-break: break-word;
 }
 
 .quick-entry-btn {
@@ -32,18 +42,188 @@ body {
 
 .table-responsive {
   border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-@media (max-width: 576px) {
-  .container-fluid {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-  h1, .h1 { font-size: 1.5rem; }
-  h2, .h2 { font-size: 1.25rem; }
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+  /* A soft right-edge fade hints that a wide table (more columns than
+     fit) can be swiped/scrolled sideways, without needing extra text. */
+  background:
+    linear-gradient(to right, #fff 30%, rgba(255, 255, 255, 0)),
+    linear-gradient(to right, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0)) 100% 0,
+    linear-gradient(to left, #fff 30%, rgba(255, 255, 255, 0)) 100% 0,
+    linear-gradient(to left, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0)) 0 0;
+  background-repeat: no-repeat;
+  background-size: 40px 100%, 14px 100%, 40px 100%, 14px 100%;
+  background-attachment: local, scroll, local, scroll;
 }
 
 .running-total {
   font-variant-numeric: tabular-nums;
+}
+
+/* Lets a flex child (e.g. a name+badge block next to a fixed amount)
+   shrink and wrap its own text instead of forcing the row wider or
+   pushing the amount onto its own line. Bootstrap has no min-width
+   utility in the default build. */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------------
+   Touch targets & readability - applies at phone/tablet widths only so
+   desktop keeps its current, denser layout.
+   --------------------------------------------------------------------- */
+@media (max-width: 991.98px) {
+  /* Never let anything (a stray fixed-width element, a wide table
+     outside its scroll container, etc.) push the whole page sideways. */
+  html, body {
+    max-width: 100vw;
+  }
+
+  .container-fluid {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  h1, .h1 { font-size: 1.4rem; }
+  h2, .h2 { font-size: 1.2rem; }
+
+  /* iOS Safari zooms the page in if a focused input's computed font
+     size is under 16px - keep every form control at/above that. */
+  .form-control,
+  .form-select,
+  textarea.form-control,
+  input.form-control {
+    font-size: 16px;
+  }
+
+  /* Comfortable thumb targets (Apple HIG / Material both recommend a
+     ~44px minimum) for buttons and nav links without ballooning
+     desktop's tighter, denser controls. */
+  .btn {
+    min-height: 44px;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+  }
+  .btn-sm {
+    min-height: 38px;
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .navbar-collapse .nav-link {
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+    font-size: 1.05rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .navbar-collapse .navbar-nav:last-child .nav-item:last-child .nav-link {
+    border-bottom: none;
+  }
+
+  /* Table cells inside a horizontal-scroll wrapper still need enough
+     padding to tap action buttons without mis-tapping a neighbour. */
+  .table td, .table th {
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  h1, .h1 { font-size: 1.3rem; }
+  .stat-card .stat-value { font-size: 1.3rem; }
+}
+
+/* ---------------------------------------------------------------------
+   Mobile "card row" - a lightweight stand-in for a table row on phones,
+   used on the highest-traffic screens (Today, Contributor history,
+   Deposits, Reconciliation) instead of forcing a desktop table to
+   scroll horizontally. Desktop keeps the real <table>.
+   --------------------------------------------------------------------- */
+.mobile-row-card {
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.6rem;
+  background: #fff;
+}
+.mobile-row-card .mrc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.mobile-row-card .mrc-top > div:first-child {
+  /* Lets a long contributor/account name wrap and shrink instead of
+     squeezing the amount onto its own line. */
+  min-width: 0;
+}
+.mobile-row-card .mrc-title {
+  font-weight: 600;
+  word-break: break-word;
+}
+.mobile-row-card .mrc-amount {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.mobile-row-card .mrc-meta {
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+.mobile-row-card .mrc-actions {
+  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Compact glanceable totals strip shown on the mobile Enter Collection
+   screen so totals stay visible without scrolling past the form. */
+.mobile-totals-strip {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.mobile-totals-strip .mts-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  background: #fff;
+  border-radius: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 0.4rem 0.25rem;
+  text-align: center;
+}
+.mobile-totals-strip .mts-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  color: #6c757d;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-totals-strip .mts-value {
+  font-weight: 700;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  /* Wrap rather than truncate - a glanceable total that hides its own
+     digits behind "..." would defeat the point of glancing at it. */
+  word-break: break-word;
+  line-height: 1.15;
+}
+
+/* Contributor autocomplete suggestion list: keep it usable with the
+   on-screen keyboard up and never let long names overflow sideways. */
+#contributor-suggestions {
+  max-height: 45vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+#contributor-suggestions .list-group-item {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  white-space: normal;
+  word-break: break-word;
 }

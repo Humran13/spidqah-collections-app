@@ -6,7 +6,9 @@
       {{ f(class_="form-check-input", **({"autofocus": True} if autofocus else {})) }}
     </div>
   {% else %}
-    {{ f(class_="form-control form-control-lg" if f.type in ['StringField','PasswordField','DateField','IntegerField'] else "form-select form-select-lg" if f.type == 'SelectField' else "form-control", placeholder=placeholder, **({"autofocus": True} if autofocus else {})) }}
+    {% set extra_attrs = {"autofocus": True} if autofocus else {} %}
+    {% if placeholder %}{% set _ = extra_attrs.update({"placeholder": placeholder}) %}{% endif %}
+    {{ f(class_="form-control form-control-lg" if f.type in ['StringField','PasswordField','DateField','IntegerField'] else "form-select form-select-lg" if f.type == 'SelectField' else "form-control", **extra_attrs) }}
   {% endif %}
   {% for error in f.errors %}
     <div class="text-danger small mt-1">{{ error }}</div>

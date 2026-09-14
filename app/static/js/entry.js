@@ -23,11 +23,23 @@
     return checked ? checked.value : 'MUKULULO';
   }
 
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
   function updateTotals(totals) {
-    document.getElementById('total-mukululo').textContent = totals.MUKULULO_fmt;
-    document.getElementById('total-friday').textContent = totals.FRIDAY_fmt;
-    document.getElementById('total-sunday').textContent = totals.SUNDAY_fmt;
-    document.getElementById('total-overall').textContent = totals.OVERALL_fmt;
+    // Full detail card (always present) and the compact mobile-only
+    // glanceable strip (m-total-*, only rendered below lg) both mirror
+    // the same figures - update whichever elements exist.
+    setText('total-mukululo', totals.MUKULULO_fmt);
+    setText('total-friday', totals.FRIDAY_fmt);
+    setText('total-sunday', totals.SUNDAY_fmt);
+    setText('total-overall', totals.OVERALL_fmt);
+    setText('m-total-mukululo', totals.MUKULULO_fmt);
+    setText('m-total-friday', totals.FRIDAY_fmt);
+    setText('m-total-sunday', totals.SUNDAY_fmt);
+    setText('m-total-overall', totals.OVERALL_fmt);
   }
 
   function fmtUGX(n) {

@@ -12,7 +12,31 @@
     </select>
   </form>
 </div>
-<div class="card">
+<!-- Phone/tablet: one card per audit entry. A table forces every row to
+     the height of its tallest wrapped JSON blob, which made this screen
+     nearly unusable below lg - cards show each field on its own line
+     instead. -->
+<div class="d-lg-none">
+  {% for e in entries %}
+    <div class="mobile-row-card">
+      <div class="mrc-top">
+        <div>
+          <div class="mrc-title">{{ e.entity_type }}{% if e.entity_id %} #{{ e.entity_id }}{% endif %}</div>
+          <div class="mrc-meta">{{ e.timestamp | localtime }}</div>
+        </div>
+        <span class="badge text-bg-light">{{ e.action.value }}</span>
+      </div>
+      <div class="mrc-meta mt-2">By {{ e.user.username if e.user else "system" }}</div>
+      {% if e.reason %}<div class="mrc-meta">Reason: {{ e.reason }}</div>{% endif %}
+      {% if e.before_json %}<div class="mrc-meta text-break">Before: {{ e.before_json }}</div>{% endif %}
+      {% if e.after_json %}<div class="mrc-meta text-break">After: {{ e.after_json }}</div>{% endif %}
+    </div>
+  {% else %}
+    <div class="text-center text-muted py-4">No audit entries.</div>
+  {% endfor %}
+</div>
+
+<div class="card d-none d-lg-block">
   <div class="table-responsive">
     <table class="table table-sm table-hover mb-0">
       <thead class="table-light"><tr><th>Time</th><th>Entity</th><th>Action</th><th>User</th><th>Reason</th><th>Before</th><th>After</th></tr></thead>
