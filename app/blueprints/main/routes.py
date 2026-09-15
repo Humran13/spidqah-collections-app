@@ -11,7 +11,7 @@ from app.models import (
     BankDeposit,
 )
 from app.services.totals import month_official_total, month_official_fund_total, month_bounds
-from app.services.banking import awaiting_banking, deposited_fund_total_all_time
+from app.services.pooled_cash import overall_awaiting_banking, pooled_historical_issued_all_time
 
 main_bp = Blueprint("main", __name__)
 
@@ -61,7 +61,12 @@ def dashboard():
     )
     recent_deposits = BankDeposit.query.order_by(BankDeposit.created_at.desc()).limit(10).all()
 
-    overall_awaiting_all_time = awaiting_banking(FundType.MUKULULO) + awaiting_banking(FundType.FRIDAY_SUNDAY)
+    # Corrected, pooled, all-time "cash that still exists and can
+    # actually be banked" - NOT simply the sum of the two per-fund cards
+    # above, which deliberately do not attempt to split the pooled
+    # historical pre-bank outflow between funds (see app.services.pooled_cash).
+    overall_awaiting_all_time = overall_awaiting_banking()
+    historical_issued_all_time = pooled_historical_issued_all_time()
 
     return render_template(
         "main/dashboard.html",
@@ -71,6 +76,7 @@ def dashboard():
         recent_transactions=recent_transactions,
         recent_deposits=recent_deposits,
         overall_awaiting_all_time=overall_awaiting_all_time,
+        historical_issued_all_time=historical_issued_all_time,
         today=today,
     )
 

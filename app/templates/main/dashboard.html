@@ -73,6 +73,13 @@
           <div class="small text-uppercase opacity-75">All-time Awaiting (all months)</div>
           <div class="stat-value">{{ overall_awaiting_all_time | ugx }}</div>
         </div>
+        {% if historical_issued_all_time > 0 %}
+        <div>
+          <div class="small text-uppercase opacity-75">Historical Issued / Pre-Bank Outflow</div>
+          <div class="stat-value">{{ historical_issued_all_time | ugx }}</div>
+          <div class="small opacity-75">already deducted above - see <a href="{{ url_for('banking.monthly_view') }}" class="link-light">Monthly Banking</a></div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

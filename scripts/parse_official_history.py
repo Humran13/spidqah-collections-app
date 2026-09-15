@@ -126,6 +126,99 @@ def read_main_ledger(ws, received_col=3, issued_col=6, date_col=8, max_row=200, 
     return rows, problems
 
 
+def allocate_historical_issues(events, monthly_gross):
+    """Date-aware allocation of pre-bank ISSUE events against pooled
+    (Mukululo + Friday + Sunday) gross monthly collections.
+
+    ``events``: chronologically sorted list of dicts, each either
+    ``{"date": date, "kind": "RECEIVE", "amount": int, "month_key": (y, m)}``
+    or ``{"date": date, "kind": "ISSUE", "amount": int, "month_key": (y, m),
+    "sheet": str, "raw": str|None}``. Must already be sorted by
+    (date, then recorded order) - same-day events process in that order.
+
+    ``monthly_gross``: {(year, month): total_pooled_gross_int} for every
+    month with any collections.
+
+    Returns a dict with:
+      - ``chronological_check``: a strict running-balance walk using the
+        exact event order given (this is what would actually happen to
+        the physical cash on hand) - flags an error if the pooled
+        balance would ever go negative, i.e. an issue that the pooled
+        cash on hand at that moment could not actually have funded.
+      - ``monthly_allocation``: for presentation, each ISSUE is
+        attributed back against months' pools, newest-eligible-first
+        (the issue's own month up to its date, then the prior month in
+        full, then the one before that, ...). A receipt dated AFTER an
+        issue is never used to fund that issue, in either calculation.
+      - ``month_remaining``: {(y, m): amount} still unconsumed per month
+        after all issues are allocated.
+    """
+    # ---- 1) strict chronological sufficiency check ----
+    running_balance = 0
+    issue_log = []
+    error = None
+    for e in events:
+        if e["kind"] == "RECEIVE":
+            running_balance += e["amount"]
+        else:
+            running_balance -= e["amount"]
+            issue_log.append({
+                "date": e["date"], "sheet": e.get("sheet"), "amount": e["amount"],
+                "raw_label": e.get("raw"), "pooled_balance_after": running_balance,
+            })
+            if running_balance < 0 and error is None:
+                error = (
+                    f"Pooled balance went negative ({running_balance}) after an issue on "
+                    f"{e['date']} ({e['amount']}) - insufficient pooled cash existed at that date."
+                )
+
+    # ---- 2) monthly newest-eligible-first allocation (for presentation) ----
+    months_sorted = sorted(monthly_gross.keys())
+    month_total_pool = dict(monthly_gross)
+    month_remaining = dict(monthly_gross)
+    month_arrived = defaultdict(int)  # cumulative RECEIVE seen so far, per month
+
+    allocation_log = []
+    for e in events:
+        key = e["month_key"]
+        if e["kind"] == "RECEIVE":
+            month_arrived[key] += e["amount"]
+            continue
+
+        need = e["amount"]
+        alloc = {}
+
+        own_month_consumed_so_far = month_total_pool.get(key, 0) - month_remaining.get(key, 0)
+        own_month_available_now = month_arrived[key] - own_month_consumed_so_far
+        take = min(own_month_available_now, need)
+        if take > 0:
+            alloc[key] = alloc.get(key, 0) + take
+            month_remaining[key] -= take
+            need -= take
+
+        if need > 0:
+            for m in sorted([mk for mk in months_sorted if mk < key], reverse=True):
+                if need <= 0:
+                    break
+                avail = month_remaining.get(m, 0)
+                take2 = min(avail, need)
+                if take2 > 0:
+                    alloc[m] = alloc.get(m, 0) + take2
+                    month_remaining[m] -= take2
+                    need -= take2
+
+        allocation_log.append({
+            "date": e["date"], "sheet": e.get("sheet"), "amount": e["amount"], "raw_label": e.get("raw"),
+            "allocated_from": alloc, "unallocated_shortfall": need,
+        })
+
+    return {
+        "chronological_check": {"issues_in_order": issue_log, "error": error, "final_pooled_balance": running_balance},
+        "monthly_allocation": allocation_log,
+        "month_remaining": month_remaining,
+    }
+
+
 def build_report(xlsx_path, start_date, go_live_date, mukululo_sheet="MUKULULO", fri_sun_sheet="FRI & SUN"):
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     muk_ws = wb[mukululo_sheet]
@@ -194,6 +287,45 @@ def build_report(xlsx_path, start_date, go_live_date, mukululo_sheet="MUKULULO",
         checks.append(("Friday+Sunday=Combined", row["year"], row["month"], row["friday"] + row["sunday"] == row["combined"]))
         checks.append(("Mukululo+Combined=Overall", row["year"], row["month"], row["mukululo"] + row["combined"] == row["overall"]))
 
+    # ---- pooled historical issued-cash allocation ----
+    monthly_gross = {(y, m): monthly[(y, m)]["mukululo"] + monthly[(y, m)]["friday"] + monthly[(y, m)]["sunday"] for (y, m) in months_sorted}
+
+    events = []
+    for r in muk_in_range:
+        key = (r["date"].year, r["date"].month)
+        if r["received"]:
+            events.append({"date": r["date"], "sheet": mukululo_sheet, "row": r["row"], "kind": "RECEIVE", "amount": r["received"], "month_key": key})
+        if r["issued"]:
+            events.append({"date": r["date"], "sheet": mukululo_sheet, "row": r["row"], "kind": "ISSUE", "amount": r["issued"], "month_key": key, "raw": r["raw_date_label"]})
+    for r in fs_in_range:
+        key = (r["date"].year, r["date"].month)
+        if r["received"]:
+            events.append({"date": r["date"], "sheet": fri_sun_sheet, "row": r["row"], "kind": "RECEIVE", "amount": r["received"], "month_key": key})
+        if r["issued"]:
+            events.append({"date": r["date"], "sheet": fri_sun_sheet, "row": r["row"], "kind": "ISSUE", "amount": r["issued"], "month_key": key, "raw": r["raw_date_label"]})
+    events.sort(key=lambda e: (e["date"], e["sheet"], e["row"]))
+
+    allocation = allocate_historical_issues(events, monthly_gross)
+
+    allocated_by_month = defaultdict(int)
+    for a in allocation["monthly_allocation"]:
+        for k, v in a["allocated_from"].items():
+            allocated_by_month[k] += v
+
+    issued_movements_for_import = [
+        {"date": e["date"].isoformat(), "amount": e["amount"], "description": e.get("raw"), "source": f"{xlsx_path} {e['sheet']} sheet"}
+        for e in events if e["kind"] == "ISSUE"
+    ]
+
+    payload_months_with_issued = []
+    for pm in payload_months:
+        key = (pm["year"], pm["month"])
+        entry = dict(pm)
+        allocated = allocated_by_month.get(key, 0)
+        if allocated:
+            entry["historical_issued_allocated"] = allocated
+        payload_months_with_issued.append(entry)
+
     return {
         "sheets_used": [mukululo_sheet, fri_sun_sheet],
         "start_date": start_date.isoformat(),
@@ -220,11 +352,28 @@ def build_report(xlsx_path, start_date, go_live_date, mukululo_sheet="MUKULULO",
         "excluded_post_golive_rows": [
             {"row": r["row"], "date": r["date"].isoformat(), "received": r["received"]} for r in excluded_post_golive
         ],
-        "checks_all_pass": all(c[3] for c in checks),
+        "checks_all_pass": all(c[3] for c in checks) and allocation["chronological_check"]["error"] is None,
         "failed_checks": [c for c in checks if not c[3]],
+        "pooled_cash_chronological_check": {
+            "issues_in_order": [
+                {"date": i["date"].isoformat(), "sheet": i["sheet"], "amount": i["amount"],
+                 "raw_label": i["raw_label"], "pooled_balance_after": i["pooled_balance_after"]}
+                for i in allocation["chronological_check"]["issues_in_order"]
+            ],
+            "error": allocation["chronological_check"]["error"],
+            "final_pooled_balance": allocation["chronological_check"]["final_pooled_balance"],
+        },
+        "monthly_lifo_allocation": [
+            {"date": a["date"].isoformat(), "sheet": a["sheet"], "amount": a["amount"], "raw_label": a["raw_label"],
+             "allocated_from": {f"{k[0]}-{k[1]:02d}": v for k, v in a["allocated_from"].items()},
+             "unallocated_shortfall": a["unallocated_shortfall"]}
+            for a in allocation["monthly_allocation"]
+        ],
+        "month_remaining_after_allocation": {f"{k[0]}-{k[1]:02d}": v for k, v in allocation["month_remaining"].items()},
         "payload_for_import": {
             "source": f"Imported from {xlsx_path} official ledger ({mukululo_sheet} + {fri_sun_sheet} sheets)",
-            "months": payload_months,
+            "months": payload_months_with_issued,
+            "issued_movements": issued_movements_for_import,
         },
     }
 

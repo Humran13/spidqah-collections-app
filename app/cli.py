@@ -164,7 +164,8 @@ def register_cli(app):
     def import_official_history(dry_run, do_apply, input_path, username):
         """Safely import OFFICIAL historical monthly totals (locked,
         admin-controlled figures - never individual contributor
-        transactions) from a small aggregated JSON payload.
+        transactions) and/or historical PRE-BANK cash movements, from a
+        small aggregated JSON payload.
 
         The payload is read from stdin by default, so the source
         spreadsheet never needs to exist on this machine:
@@ -174,12 +175,17 @@ def register_cli(app):
 
         Exactly one of --dry-run / --apply is required. Exits non-zero
         on any validation problem or unresolved conflict with an
-        already-locked month, without writing anything.
+        already-locked month's GROSS totals, without writing anything.
+        A month's historical_issued_allocated (pre-bank issued cash) can
+        always be safely updated even on an already-locked month, since
+        it never changes what was collected.
         """
         import json as json_module
         from app.services.history_import import (
-            PayloadError, validate_payload, build_plan, apply_plan,
-            ACTION_CREATE, ACTION_UPDATE, ACTION_LOCK_ONLY, ACTION_NO_CHANGE, ACTION_CONFLICT,
+            PayloadError, validate_payload, validate_movements, cross_check_issued_total,
+            build_plan, build_movement_plan, apply_combined,
+            ACTION_CREATE, ACTION_UPDATE, ACTION_LOCK_ONLY, ACTION_NO_CHANGE, ACTION_CONFLICT, ACTION_ISSUED_UPDATE,
+            MOVEMENT_ACTION_CREATE, MOVEMENT_ACTION_NO_CHANGE,
         )
 
         if dry_run == do_apply:
@@ -200,6 +206,8 @@ def register_cli(app):
 
         try:
             months = validate_payload(data)
+            movements = validate_movements(data)
+            cross_check_issued_total(months, movements)
         except PayloadError as exc:
             click.echo(f"Payload validation failed: {exc}", err=True)
             sys.exit(2)
@@ -213,25 +221,34 @@ def register_cli(app):
             sys.exit(2)
 
         plan = build_plan(months)
+        movement_plan = build_movement_plan(movements)
 
         labels = {
             ACTION_CREATE: "CREATE", ACTION_UPDATE: "UPDATE",
             ACTION_LOCK_ONLY: "LOCK (values already correct)",
             ACTION_NO_CHANGE: "no change (already imported+locked)",
-            ACTION_CONFLICT: "CONFLICT - locked with DIFFERENT values",
+            ACTION_CONFLICT: "CONFLICT - locked with DIFFERENT gross values",
+            ACTION_ISSUED_UPDATE: "UPDATE issued-allocation only (gross unchanged)",
         }
-        click.echo(f"{'Month':8} {'Action':32} {'Mukululo':>12} {'Friday':>10} {'Sunday':>10}")
+        click.echo(f"{'Month':8} {'Action':44} {'Mukululo':>12} {'Friday':>10} {'Sunday':>10} {'Issued':>10}")
         for item in plan:
             click.echo(
-                f"{item['year']}-{item['month']:02d}   {labels[item['action']]:32} "
-                f"{item['mukululo']:>12,} {item['friday']:>10,} {item['sunday']:>10,}"
+                f"{item['year']}-{item['month']:02d}   {labels[item['action']]:44} "
+                f"{item['mukululo']:>12,} {item['friday']:>10,} {item['sunday']:>10,} "
+                f"{item['historical_issued_allocated']:>10,}"
             )
             if item["action"] == ACTION_CONFLICT:
                 e = item["existing"]
                 click.echo(
-                    f"           existing locked values: mukululo={e['mukululo']:,} "
+                    f"           existing locked gross: mukululo={e['mukululo']:,} "
                     f"friday={e['friday']:,} sunday={e['sunday']:,}"
                 )
+
+        if movement_plan:
+            click.echo(f"\n{'Date':12} {'Action':14} {'Amount':>12}  Description")
+            for m in movement_plan:
+                label = "CREATE" if m["action"] == MOVEMENT_ACTION_CREATE else "already recorded"
+                click.echo(f"{m['date'].isoformat():12} {label:14} {m['amount']:>12,}  {m['description'] or ''}")
 
         conflicts = [p for p in plan if p["action"] == ACTION_CONFLICT]
         source_note = data.get("source") or None
@@ -240,7 +257,10 @@ def register_cli(app):
             if conflicts:
                 click.echo(f"\nDRY RUN: {len(conflicts)} conflict(s) found - would NOT be safe to apply as-is.", err=True)
                 sys.exit(2)
-            click.echo(f"\nDRY RUN OK: {len(plan)} month(s) validated, no conflicts. No database changes made.")
+            click.echo(
+                f"\nDRY RUN OK: {len(plan)} month(s) and {len(movement_plan)} movement(s) validated, "
+                f"no conflicts. No database changes made."
+            )
             sys.exit(0)
 
         # --apply
@@ -249,16 +269,22 @@ def register_cli(app):
             sys.exit(2)
 
         try:
-            results = apply_plan(plan, user=user, source_note=source_note)
+            month_results, movement_results = apply_combined(plan, movement_plan, user=user, source_note=source_note)
         except PayloadError as exc:
             click.echo(f"Aborting: {exc}", err=True)
             sys.exit(2)
 
-        created = sum(1 for r in results if r["applied"] == "created")
-        updated = sum(1 for r in results if r["applied"] == "updated")
-        locked = sum(1 for r in results if r["applied"] == "locked")
-        unchanged = sum(1 for r in results if r["applied"] == "no_change")
+        created = sum(1 for r in month_results if r["applied"] == "created")
+        updated = sum(1 for r in month_results if r["applied"] == "updated")
+        issued_updated = sum(1 for r in month_results if r["applied"] == "issued_updated")
+        locked = sum(1 for r in month_results if r["applied"] == "locked")
+        unchanged = sum(1 for r in month_results if r["applied"] == "no_change")
+        movements_created = sum(1 for r in movement_results if r["applied"] == "created")
+        movements_unchanged = sum(1 for r in movement_results if r["applied"] == "no_change")
         click.echo(
-            f"\nAPPLIED: {created} created, {updated} updated, {locked} newly locked, "
-            f"{unchanged} already up to date. All imported/updated months are now locked."
+            f"\nAPPLIED: {created} month(s) created, {updated} updated, {issued_updated} issued-allocation "
+            f"updated, {locked} newly locked, {unchanged} already up to date. "
+            f"{movements_created} cash movement(s) recorded, {movements_unchanged} already recorded. "
+            f"All imported/updated months are now locked; gross collection totals were never changed by "
+            f"the issued-allocation or movement steps."
         )

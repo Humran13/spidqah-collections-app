@@ -12,7 +12,22 @@
   </form>
 </div>
 
-<div class="alert alert-secondary">Overall amount awaiting banking across all months on record: <strong>{{ overall_awaiting | ugx }}</strong></div>
+<div class="alert alert-secondary">
+  Overall amount actually available to bank, across all months on record: <strong>{{ overall_awaiting | ugx }}</strong>
+  {% if total_historical_issued > 0 %}
+    <br><span class="small">This already deducts <strong>{{ total_historical_issued | ugx }}</strong> of historical pre-bank cash issued before it could be banked - see the movements below. Gross collection figures are never reduced by this; only how much is still available to bank.</span>
+  {% endif %}
+</div>
+
+{% if dec_prev %}
+<div class="alert alert-light border mb-3">
+  <strong>{{ dec_prev.month_name }}</strong> (shown for running-balance context - not part of {{ year }}'s collection statistics):
+  Gross pooled {{ dec_prev.gross_pooled | ugx }},
+  historical issued {{ dec_prev.historical_issued | ugx }},
+  deposited {{ dec_prev.deposited | ugx }},
+  adjusted remaining <strong>{{ dec_prev.adjusted_remaining | ugx }}</strong>.
+</div>
+{% endif %}
 
 <div class="card">
   <div class="table-responsive">
@@ -22,7 +37,9 @@
           <th>Month</th>
           <th class="text-end">Mukululo Collected</th><th class="text-end">Mukululo Deposited</th><th class="text-end">Mukululo Remaining</th>
           <th class="text-end">F&amp;S Collected</th><th class="text-end">F&amp;S Deposited</th><th class="text-end">F&amp;S Remaining</th>
-          <th class="text-end">Total Remaining</th>
+          <th class="text-end">Gross Pooled Collected</th>
+          <th class="text-end">Historical Pre-Bank Issued</th>
+          <th class="text-end">Adjusted Remaining Available to Bank</th>
         </tr>
       </thead>
       <tbody>
@@ -35,11 +52,35 @@
           <td class="text-end">{{ row.fs_collected | ugx }}</td>
           <td class="text-end">{{ row.fs_deposited | ugx }}</td>
           <td class="text-end {{ 'text-danger' if row.fs_remaining > 0 }}">{{ row.fs_remaining | ugx }}</td>
-          <td class="text-end fw-bold">{{ row.total_remaining | ugx }}</td>
+          <td class="text-end">{{ row.gross_pooled | ugx }}</td>
+          <td class="text-end {{ 'text-warning' if row.historical_issued > 0 }}">{{ row.historical_issued | ugx }}</td>
+          <td class="text-end fw-bold">{{ row.adjusted_remaining | ugx }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if issued_movements %}
+<div class="card mt-3">
+  <div class="card-header bg-white fw-semibold">Historical Pre-Bank Cash Movements</div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Date</th><th>Type</th><th class="text-end">Amount</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for mv in issued_movements %}
+        <tr>
+          <td>{{ mv.movement_date.strftime('%d %b %Y') }}</td>
+          <td><span class="badge text-bg-light">{{ mv.movement_type.value }}</span></td>
+          <td class="text-end">{{ mv.amount | ugx }}</td>
+          <td class="text-muted small">{{ mv.description or "" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="text-muted small mt-2">This money left the pooled cash-in-hand before it could ever be banked - it is not a bank deposit, and never changes what was originally collected. It reduces how much is shown as still available to bank above.</p>
+{% endif %}
 {% endblock %}

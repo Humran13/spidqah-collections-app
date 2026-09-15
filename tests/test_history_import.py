@@ -15,16 +15,25 @@ from app.models import (
     User,
     CHIKUMI_100_NAME,
 )
+from app.models import HistoricalCashMovement, CashMovementType
 from app.services.history_import import (
     PayloadError,
     validate_payload,
+    validate_movements,
+    cross_check_issued_total,
     build_plan,
+    build_movement_plan,
     apply_plan,
+    apply_movement_plan,
+    apply_combined,
     ACTION_CREATE,
     ACTION_UPDATE,
     ACTION_LOCK_ONLY,
     ACTION_NO_CHANGE,
     ACTION_CONFLICT,
+    ACTION_ISSUED_UPDATE,
+    MOVEMENT_ACTION_CREATE,
+    MOVEMENT_ACTION_NO_CHANGE,
 )
 from app.services.totals import month_official_total, month_official_fund_total
 
@@ -279,3 +288,144 @@ class TestDoesNotTouchUnrelatedData(object):
         assert refreshed.username == original_username
         assert refreshed.password_hash == original_hash
         assert refreshed.active is True
+
+
+class TestIssuedAllocationValidation(object):
+    def test_cross_check_rejects_mismatched_totals(self, app):
+        months = validate_payload({"months": [
+            {"year": 2026, "month": 1, "mukululo": 100000, "friday": 0, "sunday": 0, "historical_issued_allocated": 5000},
+        ]})
+        movements = validate_movements({"issued_movements": [
+            {"date": "2026-01-10", "amount": 3000, "description": "test"},
+        ]})
+        with pytest.raises(PayloadError):
+            cross_check_issued_total(months, movements)
+
+    def test_cross_check_passes_when_totals_match(self, app):
+        months = validate_payload({"months": [
+            {"year": 2026, "month": 1, "mukululo": 100000, "friday": 0, "sunday": 0, "historical_issued_allocated": 5000},
+        ]})
+        movements = validate_movements({"issued_movements": [
+            {"date": "2026-01-10", "amount": 5000, "description": "test"},
+        ]})
+        cross_check_issued_total(months, movements)  # must not raise
+
+    def test_cross_check_is_a_noop_for_plain_gross_only_payload(self, app):
+        months = validate_payload(SAMPLE_PAYLOAD)  # no historical_issued_allocated anywhere
+        movements = validate_movements(SAMPLE_PAYLOAD)  # no issued_movements key at all
+        cross_check_issued_total(months, movements)  # must not raise
+        assert movements == []
+
+    def test_rejects_negative_issued_allocated(self, app):
+        with pytest.raises(PayloadError):
+            validate_payload({"months": [
+                {"year": 2026, "month": 1, "mukululo": 0, "friday": 0, "sunday": 0, "historical_issued_allocated": -1},
+            ]})
+
+    def test_rejects_invalid_movement_date(self, app):
+        with pytest.raises(PayloadError):
+            validate_movements({"issued_movements": [{"date": "not-a-date", "amount": 1000}]})
+
+    def test_rejects_zero_or_negative_movement_amount(self, app):
+        with pytest.raises(PayloadError):
+            validate_movements({"issued_movements": [{"date": "2026-01-10", "amount": 0}]})
+
+
+class TestIssuedAllocationUpdateOnLockedRow(object):
+    """The core new safety behaviour: a month's GROSS totals, once
+    locked (e.g. the existing Jan-Sep import), can never be silently
+    changed - but its historical_issued_allocated CAN be safely set or
+    updated even while locked, because that never changes what was
+    collected."""
+
+    def test_issued_only_update_is_allowed_on_an_already_locked_month(self, app, admin_user):
+        _apply_sample(admin_user)  # January created+locked, mukululo=100000, issued=0
+        jan = HistoricalOfficialMonthlyTotal.query.filter_by(year=2026, month=1).first()
+        assert jan.locked is True
+        assert jan.historical_issued_allocated == 0
+
+        correction = {"months": [
+            {"year": 2026, "month": 1, "mukululo": 100000, "friday": 20000, "sunday": 10000,
+             "historical_issued_allocated": 15000},
+        ]}
+        months = validate_payload(correction)
+        plan = build_plan(months)
+        assert plan[0]["action"] == ACTION_ISSUED_UPDATE
+
+        apply_plan(plan, user=admin_user)
+
+        refreshed = HistoricalOfficialMonthlyTotal.query.filter_by(year=2026, month=1).first()
+        assert refreshed.locked is True  # still locked
+        assert refreshed.mukululo_total == 100000  # gross UNCHANGED
+        assert refreshed.friday_total == 20000
+        assert refreshed.sunday_total == 10000
+        assert refreshed.historical_issued_allocated == 15000  # only this changed
+
+    def test_issued_update_does_not_create_a_duplicate_row(self, app, admin_user):
+        _apply_sample(admin_user)
+        before_count = HistoricalOfficialMonthlyTotal.query.count()
+
+        correction = {"months": [
+            {"year": 2026, "month": 1, "mukululo": 100000, "friday": 20000, "sunday": 10000,
+             "historical_issued_allocated": 15000},
+        ]}
+        plan = build_plan(validate_payload(correction))
+        apply_plan(plan, user=admin_user)
+
+        assert HistoricalOfficialMonthlyTotal.query.count() == before_count
+
+    def test_gross_conflict_still_blocks_even_with_issued_allocation_present(self, app, admin_user):
+        _apply_sample(admin_user)
+        correction = {"months": [
+            {"year": 2026, "month": 1, "mukululo": 999, "friday": 20000, "sunday": 10000,
+             "historical_issued_allocated": 15000},
+        ]}
+        plan = build_plan(validate_payload(correction))
+        assert plan[0]["action"] == ACTION_CONFLICT
+        with pytest.raises(PayloadError):
+            apply_plan(plan, user=admin_user)
+        unchanged = HistoricalOfficialMonthlyTotal.query.filter_by(year=2026, month=1).first()
+        assert unchanged.mukululo_total == 100000
+        assert unchanged.historical_issued_allocated == 0
+
+
+class TestMovementsWorkflow(object):
+    def test_movement_import_is_idempotent(self, app, admin_user):
+        movements = validate_movements({"issued_movements": [
+            {"date": "2026-03-10", "amount": 5000, "description": "test issue"},
+        ]})
+        plan1 = build_movement_plan(movements)
+        assert plan1[0]["action"] == MOVEMENT_ACTION_CREATE
+        apply_movement_plan(plan1, user=admin_user)
+        assert HistoricalCashMovement.query.count() == 1
+
+        plan2 = build_movement_plan(movements)
+        assert plan2[0]["action"] == MOVEMENT_ACTION_NO_CHANGE
+        apply_movement_plan(plan2, user=admin_user)
+        assert HistoricalCashMovement.query.count() == 1  # no duplicate
+
+    def test_movement_dry_run_makes_zero_database_changes(self, app, admin_user):
+        movements = validate_movements({"issued_movements": [
+            {"date": "2026-03-10", "amount": 5000, "description": "test issue"},
+        ]})
+        build_movement_plan(movements)  # dry-run equivalent
+        assert HistoricalCashMovement.query.count() == 0
+
+    def test_combined_apply_is_all_or_nothing_across_months_and_movements(self, app, admin_user):
+        _apply_sample(admin_user)
+
+        # January gross conflict alongside an otherwise-valid movement -
+        # nothing from either should be written.
+        bad_months = build_plan(validate_payload({"months": [
+            {"year": 2026, "month": 1, "mukululo": 1, "friday": 0, "sunday": 0},
+        ]}))
+        good_movements = build_movement_plan(validate_movements({"issued_movements": [
+            {"date": "2026-01-10", "amount": 5000, "description": "should not be written"},
+        ]}))
+
+        with pytest.raises(PayloadError):
+            apply_combined(bad_months, good_movements, user=admin_user)
+
+        assert HistoricalCashMovement.query.count() == 0
+        jan = HistoricalOfficialMonthlyTotal.query.filter_by(year=2026, month=1).first()
+        assert jan.mukululo_total == 100000  # untouched

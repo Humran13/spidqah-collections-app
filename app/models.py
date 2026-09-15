@@ -78,6 +78,14 @@ class AdjustmentDirection(str, enum.Enum):
     DECREASE = "DECREASE"
 
 
+class CashMovementType(str, enum.Enum):
+    """A movement of physical cash BEFORE it ever reached a bank account -
+    never a BankDeposit (money into the bank) or BankAdjustment (a bank
+    account balance correction). See HistoricalCashMovement."""
+    ISSUED = "ISSUED"
+    RETURN = "RETURN"
+
+
 class AuditAction(str, enum.Enum):
     CREATE = "CREATE"
     EDIT = "EDIT"
@@ -241,6 +249,16 @@ class HistoricalOfficialMonthlyTotal(db.Model):
     friday_total = db.Column(db.Integer, nullable=False, default=0)
     sunday_total = db.Column(db.Integer, nullable=False, default=0)
 
+    # How much of this month's GROSS pooled collection (mukululo + friday +
+    # sunday) was consumed by a pre-bank historical cash movement (see
+    # HistoricalCashMovement) before it could ever be banked - e.g. money
+    # issued out of the pooled cash-in-hand in a later month, allocated
+    # back against earlier months' still-unbanked collections. This is
+    # NEVER an adjustment to the gross totals above; it only reduces how
+    # much of that gross is still available to bank. Always 0 unless a
+    # historical correction import has explicitly set it.
+    historical_issued_allocated = db.Column(db.Integer, nullable=False, default=0)
+
     notes = db.Column(db.Text, nullable=True)
     locked = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -256,14 +274,61 @@ class HistoricalOfficialMonthlyTotal(db.Model):
         UniqueConstraint("year", "month", name="uq_historical_total_year_month"),
         CheckConstraint("month >= 1 AND month <= 12", name="ck_historical_month_range"),
         CheckConstraint("mukululo_total >= 0 AND friday_total >= 0 AND sunday_total >= 0", name="ck_historical_totals_nonneg"),
+        CheckConstraint("historical_issued_allocated >= 0", name="ck_historical_issued_allocated_nonneg"),
     )
 
     @property
     def friday_sunday_combined_total(self):
         return self.friday_total + self.sunday_total
 
+    @property
+    def gross_pooled_total(self):
+        return self.mukululo_total + self.friday_total + self.sunday_total
+
     def __repr__(self):
         return f"<HistoricalOfficialMonthlyTotal {self.year}-{self.month:02d} locked={self.locked}>"
+
+
+class HistoricalCashMovement(db.Model):
+    """A single PRE-BANK physical cash movement from the historical
+    period, e.g. money issued/taken out of the pooled cash-in-hand
+    before it could be banked. This is deliberately NOT a BankDeposit
+    (money into a bank account) or a BankAdjustment (a bank account
+    balance correction) - the money here never reached a bank.
+
+    Not attributed to a fund: during the historical period Mukululo and
+    Friday/Sunday cash were temporarily pooled together, so this table
+    represents the pooled cash layer only. Fund-level collection totals
+    (HistoricalOfficialMonthlyTotal) are never changed by these rows -
+    see historical_issued_allocated, which records how this movement's
+    amount was allocated back against specific months' unbanked gross.
+    """
+    __tablename__ = "historical_cash_movements"
+
+    id = db.Column(db.Integer, primary_key=True)
+    movement_date = db.Column(db.Date, nullable=False, index=True)
+    movement_type = db.Column(db.Enum(CashMovementType, name="cash_movement_type"), nullable=False)
+    amount = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.String(500), nullable=True)
+    source = db.Column(db.String(255), nullable=True)
+
+    status = db.Column(db.Enum(TransactionStatus, name="cash_movement_status"), nullable=False, default=TransactionStatus.ACTIVE)
+    voided_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    voided_at = db.Column(db.DateTime, nullable=True)
+    void_reason = db.Column(db.String(500), nullable=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    voided_by = db.relationship("User", foreign_keys=[voided_by_id])
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_cash_movement_amount_positive"),
+    )
+
+    def __repr__(self):
+        return f"<HistoricalCashMovement {self.movement_date} {self.movement_type.value} {self.amount}>"
 
 
 # ---------------------------------------------------------------------------

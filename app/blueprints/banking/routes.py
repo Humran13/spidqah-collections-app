@@ -14,9 +14,15 @@ from app.models import (
     UserRole,
     AuditAction,
     ReconciliationStatus,
+    HistoricalCashMovement,
+    TransactionStatus,
 )
 from app.services.banking import awaiting_banking, estimated_balance
 from app.services.totals import month_official_fund_total
+from app.services.pooled_cash import (
+    month_gross_pooled, month_historical_issued, month_pooled_deposited, month_adjusted_remaining,
+    overall_awaiting_banking, pooled_historical_issued_all_time,
+)
 from app.services.audit import log_audit
 from app.utils import roles_required, parse_amount_ugx, parse_amount_ugx_allow_zero
 from app.blueprints.banking.forms import DepositForm, AdjustmentForm, ReconciliationForm, BankAccountForm
@@ -210,6 +216,10 @@ def monthly_view():
         mukululo_deposited = _month_fund_deposits(FundType.MUKULULO, month_start, month_end)
         fs_deposited = _month_fund_deposits(FundType.FRIDAY_SUNDAY, month_start, month_end)
 
+        gross_pooled = month_gross_pooled(year, m)
+        historical_issued = month_historical_issued(year, m)
+        adjusted_remaining = month_adjusted_remaining(year, m)
+
         rows.append({
             "month": m,
             "month_name": month_name[m],
@@ -222,11 +232,37 @@ def monthly_view():
             "total_collected": mukululo_collected + fs_collected,
             "total_deposited": mukululo_deposited + fs_deposited,
             "total_remaining": (mukululo_collected + fs_collected) - (mukululo_deposited + fs_deposited),
+            "gross_pooled": gross_pooled,
+            "historical_issued": historical_issued,
+            "adjusted_remaining": adjusted_remaining,
         })
 
-    overall_awaiting = awaiting_banking(FundType.MUKULULO) + awaiting_banking(FundType.FRIDAY_SUNDAY)
+    # Also show December of the prior year, since it can carry brought-
+    # forward pooled cash into January but would otherwise never appear
+    # on a page scoped to a single calendar year.
+    dec_prev = None
+    prev_gross = month_gross_pooled(year - 1, 12)
+    if prev_gross or month_historical_issued(year - 1, 12):
+        dec_prev = {
+            "month": 12, "month_name": f"December {year - 1}",
+            "gross_pooled": prev_gross,
+            "historical_issued": month_historical_issued(year - 1, 12),
+            "deposited": month_pooled_deposited(year - 1, 12),
+            "adjusted_remaining": month_adjusted_remaining(year - 1, 12),
+        }
 
-    return render_template("banking/monthly.html", year=year, rows=rows, overall_awaiting=overall_awaiting)
+    overall_awaiting = overall_awaiting_banking()
+    total_historical_issued = pooled_historical_issued_all_time()
+
+    issued_movements = HistoricalCashMovement.query.filter(
+        HistoricalCashMovement.status == TransactionStatus.ACTIVE
+    ).order_by(HistoricalCashMovement.movement_date.asc()).all()
+
+    return render_template(
+        "banking/monthly.html", year=year, rows=rows, dec_prev=dec_prev,
+        overall_awaiting=overall_awaiting, total_historical_issued=total_historical_issued,
+        issued_movements=issued_movements,
+    )
 
 
 def _month_fund_deposits(fund, start, end):
