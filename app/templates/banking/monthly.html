@@ -15,7 +15,8 @@
 <div class="alert alert-secondary">
   Overall amount actually available to bank, across all months on record: <strong>{{ overall_awaiting | ugx }}</strong>
   {% if total_historical_issued > 0 %}
-    <br><span class="small">This already deducts <strong>{{ total_historical_issued | ugx }}</strong> of historical pre-bank cash issued before it could be banked - see the movements below. Gross collection figures are never reduced by this; only how much is still available to bank.</span>
+    <br><span class="small">This already deducts <strong>{{ total_historical_issued | ugx }}</strong> of historical cash consumed by pre-bank issues - see the actual dated movements below. Gross collection figures are never reduced by this; only how much is still available to bank.</span>
+    <br><span class="small"><strong>Historical Issued Allocated</strong> below is a reconciliation figure, not a transaction date: it shows which month's still-unbanked cash is treated as having funded an issue (oldest available month first), not when the issue actually happened - see the movements section for the real dates.</span>
   {% endif %}
 </div>
 
@@ -23,7 +24,7 @@
 <div class="alert alert-light border mb-3">
   <strong>{{ dec_prev.month_name }}</strong> (shown for running-balance context - not part of {{ year }}'s collection statistics):
   Gross pooled {{ dec_prev.gross_pooled | ugx }},
-  historical issued {{ dec_prev.historical_issued | ugx }},
+  historical issued allocated {{ dec_prev.historical_issued | ugx }},
   deposited {{ dec_prev.deposited | ugx }},
   adjusted remaining <strong>{{ dec_prev.adjusted_remaining | ugx }}</strong>.
 </div>
@@ -38,7 +39,7 @@
           <th class="text-end">Mukululo Collected</th><th class="text-end">Mukululo Deposited</th><th class="text-end">Mukululo Remaining</th>
           <th class="text-end">F&amp;S Collected</th><th class="text-end">F&amp;S Deposited</th><th class="text-end">F&amp;S Remaining</th>
           <th class="text-end">Gross Pooled Collected</th>
-          <th class="text-end">Historical Pre-Bank Issued</th>
+          <th class="text-end">Historical Issued Allocated</th>
           <th class="text-end">Adjusted Remaining Available to Bank</th>
         </tr>
       </thead>

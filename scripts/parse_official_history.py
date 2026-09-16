@@ -145,11 +145,19 @@ def allocate_historical_issues(events, monthly_gross):
         the physical cash on hand) - flags an error if the pooled
         balance would ever go negative, i.e. an issue that the pooled
         cash on hand at that moment could not actually have funded.
-      - ``monthly_allocation``: for presentation, each ISSUE is
-        attributed back against months' pools, newest-eligible-first
-        (the issue's own month up to its date, then the prior month in
-        full, then the one before that, ...). A receipt dated AFTER an
-        issue is never used to fund that issue, in either calculation.
+        This never changes the ACTUAL recorded movement dates/amounts -
+        it is purely a sufficiency check.
+      - ``monthly_allocation``: for presentation/reconciliation, each
+        ISSUE is attributed back against months' pools OLDEST-ELIGIBLE-
+        FIRST (FIFO): sort every month up to and including the issue's
+        own month from oldest to newest, and consume that month's
+        remaining pool in full before moving to the next-oldest one,
+        stopping as soon as the issue amount is fully allocated. A
+        month strictly AFTER the issue's own month is never eligible
+        (money that did not exist yet cannot fund an earlier issue).
+        This is a reconciliation presentation only - it never moves or
+        rewrites the actual movement transaction (still dated/amounted
+        exactly as recorded).
       - ``month_remaining``: {(y, m): amount} still unconsumed per month
         after all issues are allocated.
     """
@@ -172,40 +180,31 @@ def allocate_historical_issues(events, monthly_gross):
                     f"{e['date']} ({e['amount']}) - insufficient pooled cash existed at that date."
                 )
 
-    # ---- 2) monthly newest-eligible-first allocation (for presentation) ----
+    # ---- 2) monthly OLDEST-eligible-first (FIFO) allocation (for presentation) ----
     months_sorted = sorted(monthly_gross.keys())
-    month_total_pool = dict(monthly_gross)
     month_remaining = dict(monthly_gross)
-    month_arrived = defaultdict(int)  # cumulative RECEIVE seen so far, per month
 
     allocation_log = []
     for e in events:
-        key = e["month_key"]
-        if e["kind"] == "RECEIVE":
-            month_arrived[key] += e["amount"]
+        if e["kind"] != "ISSUE":
             continue
-
+        key = e["month_key"]
         need = e["amount"]
         alloc = {}
 
-        own_month_consumed_so_far = month_total_pool.get(key, 0) - month_remaining.get(key, 0)
-        own_month_available_now = month_arrived[key] - own_month_consumed_so_far
-        take = min(own_month_available_now, need)
-        if take > 0:
-            alloc[key] = alloc.get(key, 0) + take
-            month_remaining[key] -= take
-            need -= take
-
-        if need > 0:
-            for m in sorted([mk for mk in months_sorted if mk < key], reverse=True):
-                if need <= 0:
-                    break
-                avail = month_remaining.get(m, 0)
-                take2 = min(avail, need)
-                if take2 > 0:
-                    alloc[m] = alloc.get(m, 0) + take2
-                    month_remaining[m] -= take2
-                    need -= take2
+        # Oldest-to-newest, capped at the issue's own month - a month
+        # after the issue never funds it, regardless of how much it
+        # collected.
+        eligible_months = sorted(m for m in months_sorted if m <= key)
+        for m in eligible_months:
+            if need <= 0:
+                break
+            avail = month_remaining.get(m, 0)
+            take = min(avail, need)
+            if take > 0:
+                alloc[m] = alloc.get(m, 0) + take
+                month_remaining[m] -= take
+                need -= take
 
         allocation_log.append({
             "date": e["date"], "sheet": e.get("sheet"), "amount": e["amount"], "raw_label": e.get("raw"),

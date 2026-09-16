@@ -48,55 +48,83 @@ class TestChronologicalSufficiency(object):
         assert first_issue_balance == 100 - 600
 
 
-class TestMonthlyLifoAllocation(object):
-    def test_issue_within_its_own_month_is_allocated_to_that_month(self):
-        events = [
-            receive(date(2026, 3, 1), 500, (2026, 3)),
-            issue(date(2026, 3, 10), 300, (2026, 3)),
-        ]
-        result = poh.allocate_historical_issues(events, {(2026, 3): 500})
-        alloc = result["monthly_allocation"][0]["allocated_from"]
-        assert alloc == {(2026, 3): 300}
-        assert result["month_remaining"][(2026, 3)] == 200
+class TestMonthlyFifoAllocation(object):
+    """Reconciliation/presentation allocation: OLDEST eligible pooled
+    month first (FIFO), capped at the issue's own month. This never
+    moves or rewrites the actual movement transaction - it only decides
+    which months' unbanked gross is shown as consumed by it."""
 
-    def test_only_receipts_up_to_the_issue_date_are_eligible_in_the_issue_month(self):
-        """Money collected in March AFTER the 10th must not fund a
-        10 March issue, even though it is nominally 'March's pool'."""
+    def test_oldest_eligible_month_is_consumed_first(self):
+        monthly_gross = {(2025, 12): 100, (2026, 1): 200, (2026, 2): 300}
         events = [
-            receive(date(2026, 3, 1), 200, (2026, 3)),
-            issue(date(2026, 3, 10), 500, (2026, 3)),
-            receive(date(2026, 3, 20), 1000, (2026, 3)),  # arrives after the issue
-        ]
-        result = poh.allocate_historical_issues(events, {(2026, 3): 1200})
-        alloc = result["monthly_allocation"][0]["allocated_from"]
-        # Only the 200 available before the issue could be used from
-        # March itself; the rest is an unallocated shortfall at the
-        # monthly-presentation level (no earlier month exists here).
-        assert alloc.get((2026, 3), 0) == 200
-        assert result["monthly_allocation"][0]["unallocated_shortfall"] == 300
-
-    def test_newest_eligible_unbanked_cash_consumed_first_spills_to_earlier_months(self):
-        """Per the required allocation rule: an issue drains its own
-        month's pool first, then the most recent earlier month, and so
-        on - never skipping straight to an older month while a newer
-        one still has unconsumed cash."""
-        monthly_gross = {(2026, 1): 1000, (2026, 2): 1000, (2026, 3): 300}
-        events = [
-            receive(date(2026, 1, 5), 1000, (2026, 1)),
-            receive(date(2026, 2, 5), 1000, (2026, 2)),
-            receive(date(2026, 3, 5), 300, (2026, 3)),
-            issue(date(2026, 3, 10), 1200, (2026, 3)),  # more than March alone has
+            receive(date(2025, 12, 5), 100, (2025, 12)),
+            receive(date(2026, 1, 5), 200, (2026, 1)),
+            receive(date(2026, 2, 5), 300, (2026, 2)),
+            issue(date(2026, 2, 10), 50, (2026, 2)),
         ]
         result = poh.allocate_historical_issues(events, monthly_gross)
         alloc = result["monthly_allocation"][0]["allocated_from"]
-        # March's own 300 first, then February (the newer of the two
-        # earlier months) absorbs the remaining 900 - January untouched.
-        assert alloc[(2026, 3)] == 300
-        assert alloc[(2026, 2)] == 900
-        assert (2026, 1) not in alloc
-        assert result["month_remaining"][(2026, 1)] == 1000
-        assert result["month_remaining"][(2026, 2)] == 100
-        assert result["month_remaining"][(2026, 3)] == 0
+        # December (the oldest eligible month) is drawn on first, even
+        # though the issue happened in February.
+        assert alloc == {(2025, 12): 50}
+        assert result["month_remaining"][(2025, 12)] == 50
+        assert result["month_remaining"][(2026, 1)] == 200  # untouched
+        assert result["month_remaining"][(2026, 2)] == 300  # untouched (own month, not yet needed)
+
+    def test_oldest_two_months_fully_drained_third_only_partially(self):
+        """Mirrors the real correction shape: an issue large enough to
+        fully consume the two oldest eligible months and partially
+        consume a third, leaving the issue's own (newest eligible)
+        month completely untouched."""
+        monthly_gross = {(2025, 12): 100, (2026, 1): 400, (2026, 2): 400, (2026, 3): 300}
+        events = [
+            receive(date(2025, 12, 5), 100, (2025, 12)),
+            receive(date(2026, 1, 5), 400, (2026, 1)),
+            receive(date(2026, 2, 5), 400, (2026, 2)),
+            receive(date(2026, 3, 5), 300, (2026, 3)),
+            issue(date(2026, 3, 10), 350, (2026, 3)),  # 100 + 400 covers it with 250 -> Feb needs 250
+        ]
+        result = poh.allocate_historical_issues(events, monthly_gross)
+        alloc = result["monthly_allocation"][0]["allocated_from"]
+
+        assert alloc[(2025, 12)] == 100
+        assert alloc[(2026, 1)] == 250
+        assert (2026, 2) not in alloc
+        assert (2026, 3) not in alloc  # the issue's own month is untouched
+
+        assert result["month_remaining"][(2025, 12)] == 0
+        assert result["month_remaining"][(2026, 1)] == 150
+        assert result["month_remaining"][(2026, 2)] == 400  # fully untouched
+        assert result["month_remaining"][(2026, 3)] == 300  # fully untouched (own gross)
+
+    def test_own_month_only_used_after_older_eligible_balances_exhausted(self):
+        monthly_gross = {(2025, 12): 50, (2026, 1): 500}
+        events = [
+            receive(date(2025, 12, 5), 50, (2025, 12)),
+            receive(date(2026, 1, 5), 500, (2026, 1)),
+            issue(date(2026, 1, 10), 500, (2026, 1)),  # exceeds December alone
+        ]
+        result = poh.allocate_historical_issues(events, monthly_gross)
+        alloc = result["monthly_allocation"][0]["allocated_from"]
+        assert alloc[(2025, 12)] == 50
+        assert alloc[(2026, 1)] == 450  # own month used only for the remainder
+        assert result["month_remaining"][(2026, 1)] == 50
+
+    def test_months_after_the_issue_are_never_eligible(self):
+        """A month later than the issue's own month must never be
+        touched, even if earlier months run out."""
+        monthly_gross = {(2026, 1): 10, (2026, 2): 1000}
+        events = [
+            receive(date(2026, 1, 5), 10, (2026, 1)),
+            issue(date(2026, 1, 10), 500, (2026, 1)),  # far more than January has
+            receive(date(2026, 2, 5), 1000, (2026, 2)),
+        ]
+        result = poh.allocate_historical_issues(events, monthly_gross)
+        alloc = result["monthly_allocation"][0]["allocated_from"]
+        assert alloc == {(2026, 1): 10}
+        assert result["monthly_allocation"][0]["unallocated_shortfall"] == 490
+        assert (2026, 2) not in alloc
+        assert result["month_remaining"][(2026, 2)] == 1000  # completely untouched
 
     def test_pooled_combination_of_receipts_can_fund_an_issue_regardless_of_source(self):
         """Receipts from different 'sheets' (funds) are pooled together
@@ -111,17 +139,21 @@ class TestMonthlyLifoAllocation(object):
         assert result["chronological_check"]["error"] is None
         assert result["month_remaining"][(2026, 1)] == 50
 
-    def test_earliest_month_absorbs_nothing_when_not_needed(self):
-        """Mirrors the real correction: if the newer months' pools are
-        enough on their own, an older month (e.g. a brought-forward
-        December) must be left completely untouched."""
-        monthly_gross = {(2025, 12): 500, (2026, 1): 2000}
+    def test_total_allocated_across_months_equals_total_issued(self):
+        """The redistribution never changes the total - only where it is
+        shown as coming from."""
+        monthly_gross = {(2025, 12): 100, (2026, 1): 400, (2026, 2): 400, (2026, 3): 300}
         events = [
-            receive(date(2025, 12, 5), 500, (2025, 12)),
-            receive(date(2026, 1, 5), 2000, (2026, 1)),
-            issue(date(2026, 1, 10), 1500, (2026, 1)),
+            receive(date(2025, 12, 5), 100, (2025, 12)),
+            receive(date(2026, 1, 5), 400, (2026, 1)),
+            receive(date(2026, 2, 5), 400, (2026, 2)),
+            receive(date(2026, 3, 5), 300, (2026, 3)),
+            issue(date(2026, 3, 10), 350, (2026, 3)),
         ]
         result = poh.allocate_historical_issues(events, monthly_gross)
         alloc = result["monthly_allocation"][0]["allocated_from"]
-        assert alloc == {(2026, 1): 1500}
-        assert result["month_remaining"][(2025, 12)] == 500  # completely untouched
+        assert sum(alloc.values()) == 350 == events[-1]["amount"]
+
+        total_gross = sum(monthly_gross.values())
+        total_remaining = sum(result["month_remaining"].values())
+        assert total_gross - total_remaining == 350
