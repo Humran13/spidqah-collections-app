@@ -288,3 +288,90 @@ def register_cli(app):
             f"All imported/updated months are now locked; gross collection totals were never changed by "
             f"the issued-allocation or movement steps."
         )
+
+    @app.cli.command("import-contributors")
+    @click.option("--dry-run", "dry_run", is_flag=True, default=False,
+                  help="Validate and show what would change. Makes no database writes.")
+    @click.option("--apply", "do_apply", is_flag=True, default=False,
+                  help="Actually create the new contributors.")
+    @click.option("--input", "input_path", default=None,
+                  help="Read names from this file instead of stdin.")
+    @click.option("--username", default=None,
+                  help="Admin username to attribute created contributors to (defaults to the first active Admin).")
+    @with_appcontext
+    def import_contributors(dry_run, do_apply, input_path, username):
+        """Safely bulk-import Contributor NAME-ONLY records (no phone, no
+        financial data - never creates a ContributionTransaction) from
+        newline-separated or JSON stdin input.
+
+            cat names.txt | flask import-contributors --dry-run
+            cat names.txt | flask import-contributors --apply
+
+        Exactly one of --dry-run / --apply is required. Duplicate
+        protection is exact-match only (case-insensitive, whitespace-
+        normalized) - similarly-spelled names are reported as a warning
+        but both are still created; nothing is ever auto-merged.
+        """
+        from app.services.contributor_import import (
+            PayloadError, parse_names, build_plan, apply_plan,
+            ACTION_CREATE, ACTION_SKIP_EXISTING, ACTION_SKIP_DUPLICATE_IN_PAYLOAD,
+        )
+
+        if dry_run == do_apply:
+            click.echo("Specify exactly one of --dry-run or --apply.", err=True)
+            sys.exit(2)
+
+        if input_path:
+            with open(input_path, "r", encoding="utf-8") as f:
+                raw = f.read()
+        else:
+            raw = sys.stdin.read()
+
+        try:
+            raw_names = parse_names(raw)
+            plan = build_plan(raw_names)
+        except PayloadError as exc:
+            click.echo(f"Payload validation failed: {exc}", err=True)
+            sys.exit(2)
+
+        if not plan:
+            click.echo("No valid names found in payload.", err=True)
+            sys.exit(2)
+
+        query = User.query.filter_by(role=UserRole.ADMIN, active=True)
+        if username:
+            query = query.filter_by(username=username)
+        user = query.order_by(User.id.asc()).first()
+        if user is None:
+            click.echo("No matching active Admin user found to attribute this import to.", err=True)
+            sys.exit(2)
+
+        labels = {
+            ACTION_CREATE: "CREATE",
+            ACTION_SKIP_EXISTING: "skip (already exists)",
+            ACTION_SKIP_DUPLICATE_IN_PAYLOAD: "skip (duplicate within this payload)",
+        }
+        click.echo(f"{'Action':34} Name")
+        for item in plan:
+            click.echo(f"{labels[item['action']]:34} {item['name']}")
+            for s in item.get("similar", []):
+                click.echo(f"    possible duplicate warning: similar to existing '{s['name']}' (NOT merged)")
+
+        created = sum(1 for p in plan if p["action"] == ACTION_CREATE)
+        skipped_existing = sum(1 for p in plan if p["action"] == ACTION_SKIP_EXISTING)
+        skipped_dupe = sum(1 for p in plan if p["action"] == ACTION_SKIP_DUPLICATE_IN_PAYLOAD)
+
+        if dry_run:
+            click.echo(
+                f"\nDRY RUN OK: {created} to create, {skipped_existing} already exist, "
+                f"{skipped_dupe} duplicate within this payload. No database changes made."
+            )
+            sys.exit(0)
+
+        results = apply_plan(plan, user=user, source_note="flask import-contributors")
+        actually_created = sum(1 for r in results if r["applied"] == "created")
+        click.echo(
+            f"\nAPPLIED: {actually_created} contributor(s) created, {skipped_existing} already existed, "
+            f"{skipped_dupe} duplicate within this payload skipped. No contribution transactions or "
+            f"financial totals were touched."
+        )
