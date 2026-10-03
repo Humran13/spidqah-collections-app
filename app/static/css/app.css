@@ -227,3 +227,6 @@ body {
   white-space: normal;
   word-break: break-word;
 }
+
+/* PWA install hint (iOS) - sits above the bottom of the screen on phones. */
+#pwa-ios-hint { z-index: 1080; }

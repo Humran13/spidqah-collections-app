@@ -120,6 +120,26 @@ Copy `.env.example` to `.env` and fill in real values. Never commit
 | `SESSION_COOKIE_SECURE` | Set to `true` once served over HTTPS |
 | `FIRST_ADMIN_USERNAME` / `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` | First Admin user, created automatically on container start if no matching active Admin exists yet |
 | `RATELIMIT_ENABLED` | Login rate limiting on/off |
+| `UPLOAD_DIR` | Persistent folder for Admin-uploaded files (PWA logo). Docker uses the `spidqah_uploads` volume. Never inside the git checkout |
+
+## Installable app (PWA), reports and corrections
+
+- **App name, short name and logo** are set by Admin under *Admin > App name
+  & logo*. The logo is checked by content (PNG/JPEG/WEBP, up to 2 MB, 128-4000
+  px), re-encoded, and stored on the upload volume. Icons (192/512, maskable,
+  Apple touch, favicon) are generated from it with the aspect ratio kept.
+- The service worker caches only versioned static assets and icons. Pages,
+  reports, exports, POST requests and the manifest always use the network,
+  and authenticated responses are sent with `Cache-Control: no-store`.
+- **Report filters**: *Exact date* sits beside From/To. When both are given,
+  Exact date wins (server-side). Filtered grand totals are computed on the
+  server over the full filtered result set.
+- **Corrections**: editing or deleting a contribution (Delete = soft void,
+  never physically removed) is audited with before/after values and a
+  reason. Corrections are refused when they fall in a month whose historical
+  total is locked, or would push a fund's collected amount below what has
+  already been banked. An existing Daily Close for the affected date is
+  recalculated; the physical count you entered is kept.
 
 ## Running with Docker (recommended)
 

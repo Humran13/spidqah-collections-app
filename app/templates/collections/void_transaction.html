@@ -1,19 +1,25 @@
 {% extends "base.html" %}
 {% from "_macros.html" import field %}
-{% block title %}Void entry{% endblock %}
+{% block title %}Delete entry{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-md-7">
     <div class="card">
       <div class="card-body">
-        <h1 class="h4 mb-1">Void entry - {{ txn.contributor.name }}</h1>
+        <h1 class="h4 mb-1">Delete entry - {{ txn.contributor.name }}</h1>
         <p class="text-muted">{{ txn.date.strftime('%d %b %Y') }} &middot; {{ txn.collection_type.value }} &middot; {{ txn.amount | ugx }}</p>
-        <p>This transaction will be marked VOID and excluded from all totals. It stays visible in the audit history - it is never deleted.</p>
-        <form method="post">
+        <p>This entry will be marked <strong>deleted</strong> (voided). It will be excluded from every total and report, and any open Daily Close for this date is recalculated. It is never physically removed and stays visible in the audit log.</p>
+        <form method="post" onsubmit="return confirm('Delete this entry? It will be removed from all totals.');">
           {{ form.hidden_tag() }}
           {{ field(form.reason) }}
-          <button type="submit" class="btn btn-danger btn-lg w-100">Void this entry</button>
+          <div class="form-check mb-3">
+            {{ form.confirm(class_="form-check-input") }}
+            {{ form.confirm.label(class_="form-check-label") }}
+            {% for error in form.confirm.errors %}<div class="text-danger small">Please confirm before deleting.</div>{% endfor %}
+          </div>
+          <button type="submit" class="btn btn-danger btn-lg w-100">Delete this entry</button>
         </form>
+        <a class="btn btn-link w-100 mt-2" href="{{ url_for('collections.history', date=txn.date.isoformat()) }}">Cancel</a>
       </div>
     </div>
   </div>

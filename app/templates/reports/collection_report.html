@@ -2,7 +2,6 @@
 {% block title %}{{ title }} Report{% endblock %}
 {% block content %}
 <h1 class="h4 mb-3">{{ title }} Report</h1>
-{% set csv_url = url_for('reports.collection_report', fund_key=fund_key, format='csv') %}
 {% include "reports/_date_range_form.html" %}
 <div class="alert alert-secondary">Total for period: <strong>{{ total | ugx }}</strong></div>
 <div class="card">

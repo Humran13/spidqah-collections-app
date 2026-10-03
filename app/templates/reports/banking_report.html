@@ -2,7 +2,6 @@
 {% block title %}Banking Report{% endblock %}
 {% block content %}
 <h1 class="h4 mb-3">Banking Report</h1>
-{% set csv_url = url_for('reports.banking_report', format='csv') %}
 {% include "reports/_date_range_form.html" %}
 <div class="alert alert-secondary">Total deposited in period: <strong>{{ total | ugx }}</strong></div>
 <div class="card">

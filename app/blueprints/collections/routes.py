@@ -2,9 +2,8 @@ from datetime import date, datetime
 
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
-from sqlalchemy import func
 
-from app.extensions import db, csrf
+from app.extensions import db
 from app.models import (
     ContributionTransaction,
     Contributor,
@@ -16,6 +15,8 @@ from app.models import (
 from app.services.contributors import search_contributors, find_exact, find_similar
 from app.services.audit import log_audit
 from app.services.settings import get_go_live_date
+from app.services.daily_close import day_totals, apply_snapshot, refresh_daily_close
+from app.services.contribution_corrections import apply_guarded_change, CorrectionBlocked
 from app.utils import roles_required, parse_amount_ugx
 from app.blueprints.collections.forms import (
     HistoricalEntryForm,
@@ -29,20 +30,6 @@ collections_bp = Blueprint("collections", __name__, url_prefix="/collections")
 ENTRY_ROLES = (UserRole.ADMIN, UserRole.DATA_ENTRY, UserRole.COLLECTOR)
 BACKENTRY_ROLES = (UserRole.ADMIN, UserRole.DATA_ENTRY)
 EDIT_ROLES = (UserRole.ADMIN, UserRole.DATA_ENTRY)
-
-
-def _day_totals(day):
-    rows = (
-        db.session.query(ContributionTransaction.collection_type, func.coalesce(func.sum(ContributionTransaction.amount), 0))
-        .filter(ContributionTransaction.date == day, ContributionTransaction.status == TransactionStatus.ACTIVE)
-        .group_by(ContributionTransaction.collection_type)
-        .all()
-    )
-    totals = {"MUKULULO": 0, "FRIDAY": 0, "SUNDAY": 0}
-    for ctype, total in rows:
-        totals[ctype.value] = int(total)
-    totals["OVERALL"] = totals["MUKULULO"] + totals["FRIDAY"] + totals["SUNDAY"]
-    return totals
 
 
 @collections_bp.route("/entry")
@@ -62,7 +49,7 @@ def entry():
         "collections/entry.html",
         selected_date=selected_date,
         collection_type=collection_type,
-        totals=_day_totals(selected_date),
+        totals=day_totals(selected_date),
     )
 
 
@@ -152,7 +139,7 @@ def api_save_entry():
     return jsonify({
         "ok": True,
         "contributor": {"id": contributor.id, "name": contributor.name},
-        "totals": _day_totals(entry_date),
+        "totals": day_totals(entry_date),
     })
 
 
@@ -180,43 +167,84 @@ def history():
     )
 
 
+def _txn_snapshot(txn):
+    """The audit-relevant state of one contribution entry."""
+    return {
+        "date": txn.date.isoformat(),
+        "collection_type": txn.collection_type.value,
+        "contributor": txn.contributor.name,
+        "amount": txn.amount,
+        "note": txn.note,
+        "status": txn.status.value,
+    }
+
+
+def _active_contributor_by_name(raw_name):
+    """Corrections only attach an entry to an EXISTING active contributor.
+    They never create contributors as a side effect."""
+    normalized = Contributor.normalize(raw_name or "")
+    contributor = Contributor.query.filter_by(name_normalized=normalized).first() if normalized else None
+    if contributor is None or not contributor.active or contributor.merged_into_id is not None:
+        raise ValueError(f'No active contributor named "{(raw_name or "").strip()}". Add the contributor first.')
+    return contributor
+
+
 @collections_bp.route("/transactions/<int:txn_id>/edit", methods=["GET", "POST"])
 @login_required
 @roles_required(*EDIT_ROLES)
 def edit_transaction(txn_id):
     txn = db.session.get(ContributionTransaction, txn_id) or _abort404()
     if txn.status == TransactionStatus.VOID:
-        flash("Voided transactions cannot be edited.", "warning")
+        flash("Deleted entries cannot be edited.", "warning")
         return redirect(url_for("collections.history", date=txn.date.isoformat()))
 
-    form = EditTransactionForm(obj=txn)
+    form = EditTransactionForm()
     if request.method == "GET":
+        form.contributor_name.data = txn.contributor.name
+        form.date.data = txn.date
+        form.collection_type.data = txn.collection_type.value
         form.amount.data = str(txn.amount)
+        form.note.data = txn.note or ""
 
     if form.validate_on_submit():
         try:
             new_amount = parse_amount_ugx(form.amount.data)
+            new_contributor = _active_contributor_by_name(form.contributor_name.data)
         except ValueError as exc:
             flash(str(exc), "danger")
             return render_template("collections/edit_transaction.html", form=form, txn=txn)
 
-        before = {
-            "date": txn.date.isoformat(), "collection_type": txn.collection_type.value,
-            "amount": txn.amount, "note": txn.note,
-        }
-        txn.date = form.date.data
-        txn.collection_type = CollectionType[form.collection_type.data]
-        txn.amount = new_amount
-        txn.note = (form.note.data or "").strip() or None
-        txn.updated_by_id = current_user.id
-        txn.updated_at = datetime.utcnow()
-        after = {
-            "date": txn.date.isoformat(), "collection_type": txn.collection_type.value,
-            "amount": txn.amount, "note": txn.note,
-        }
+        new_date = form.date.data
+        new_type = CollectionType[form.collection_type.data]
+        new_note = (form.note.data or "").strip() or None
+        old_day = txn.date
+        before = _txn_snapshot(txn)
+
+        def mutate():
+            txn.date = new_date
+            txn.collection_type = new_type
+            txn.contributor_id = new_contributor.id
+            txn.amount = new_amount
+            txn.note = new_note
+            txn.updated_by_id = current_user.id
+            txn.updated_at = datetime.utcnow()
+
+        try:
+            apply_guarded_change([old_day, new_date], mutate)
+        except CorrectionBlocked as exc:
+            flash(str(exc), "danger")
+            return render_template("collections/edit_transaction.html", form=form, txn=txn)
+
+        after = _txn_snapshot(txn)
+        if after == before:
+            flash("No changes were made.", "info")
+            return redirect(url_for("collections.history", date=txn.date.isoformat()))
+
         log_audit("ContributionTransaction", txn.id, AuditAction.EDIT, before=before, after=after, reason=form.reason.data)
+        for day in {old_day, new_date}:
+            refresh_daily_close(day, reason="Recalculated after contribution correction")
         db.session.commit()
-        flash("Transaction updated.", "success")
+        flash("Entry corrected. Totals and reports now reflect the change.", "success")
         return redirect(url_for("collections.history", date=txn.date.isoformat()))
 
     return render_template("collections/edit_transaction.html", form=form, txn=txn)
@@ -226,23 +254,36 @@ def edit_transaction(txn_id):
 @login_required
 @roles_required(*EDIT_ROLES)
 def void_transaction(txn_id):
+    """Delete = soft delete. The row is marked VOID, excluded from every
+    total, and kept in the audit log. It is never physically removed."""
     txn = db.session.get(ContributionTransaction, txn_id) or _abort404()
     form = VoidTransactionForm()
     if txn.status == TransactionStatus.VOID:
-        flash("Transaction is already void.", "info")
+        flash("This entry is already deleted.", "info")
         return redirect(url_for("collections.history", date=txn.date.isoformat()))
 
     if form.validate_on_submit():
-        before = {"status": txn.status.value}
-        txn.status = TransactionStatus.VOID
-        txn.voided_by_id = current_user.id
-        txn.voided_at = datetime.utcnow()
-        txn.void_reason = form.reason.data
-        log_audit("ContributionTransaction", txn.id, AuditAction.VOID, before=before,
-                   after={"status": "VOID"}, reason=form.reason.data)
+        day = txn.date
+        before = _txn_snapshot(txn)
+
+        def mutate():
+            txn.status = TransactionStatus.VOID
+            txn.voided_by_id = current_user.id
+            txn.voided_at = datetime.utcnow()
+            txn.void_reason = form.reason.data
+
+        try:
+            apply_guarded_change([day], mutate)
+        except CorrectionBlocked as exc:
+            flash(str(exc), "danger")
+            return render_template("collections/void_transaction.html", form=form, txn=txn)
+
+        after = _txn_snapshot(txn)
+        log_audit("ContributionTransaction", txn.id, AuditAction.VOID, before=before, after=after, reason=form.reason.data)
+        refresh_daily_close(day, reason="Recalculated after entry deleted")
         db.session.commit()
-        flash("Transaction voided.", "success")
-        return redirect(url_for("collections.history", date=txn.date.isoformat()))
+        flash("Entry deleted. It no longer counts in any total and remains in the audit log.", "success")
+        return redirect(url_for("collections.history", date=day.isoformat()))
 
     return render_template("collections/void_transaction.html", form=form, txn=txn)
 
@@ -296,7 +337,10 @@ def historical_entry():
 @login_required
 @roles_required(*EDIT_ROLES)
 def session_close():
-    from app.models import CollectionSession, SessionStatus
+    """Daily Close. ONE reconciliation date (the ``date`` query parameter)
+    drives both the system totals on the left and the physical cash count
+    on the right. The posted form cannot change the date."""
+    from app.models import CollectionSession
 
     day = request.args.get("date")
     try:
@@ -305,12 +349,17 @@ def session_close():
         selected_date = date.today()
 
     existing = CollectionSession.query.filter_by(date=selected_date).first()
-    form = SessionCloseForm(date=selected_date)
-    if existing and request.method == "GET":
+    form = SessionCloseForm()
+
+    if request.method == "POST" and request.form.get("reconciliation_date", "") != selected_date.isoformat():
+        flash("The reconciliation date did not match this page. Nothing was saved - please try again.", "danger")
+        return redirect(url_for("collections.session_close", date=selected_date.isoformat()))
+
+    if request.method == "GET" and existing:
         form.physical_cash_counted.data = str(existing.physical_cash_counted or "")
         form.notes.data = existing.notes
 
-    totals = _day_totals(selected_date)
+    totals = day_totals(selected_date)
 
     if form.validate_on_submit():
         try:
@@ -320,21 +369,9 @@ def session_close():
             return render_template("collections/session.html", form=form, selected_date=selected_date,
                                     totals=totals, existing=existing)
 
-        session_row = existing or CollectionSession(date=form.date.data, created_by_id=current_user.id)
-        session_row.date = form.date.data
-        session_row.mukululo_system_total = totals["MUKULULO"]
-        session_row.friday_system_total = totals["FRIDAY"]
-        session_row.sunday_system_total = totals["SUNDAY"]
-        session_row.physical_cash_counted = physical
-        session_row.difference = physical - totals["OVERALL"]
-        if session_row.difference == 0:
-            session_row.status = SessionStatus.BALANCED
-        elif session_row.difference > 0:
-            session_row.status = SessionStatus.OVER
-        else:
-            session_row.status = SessionStatus.SHORT
+        session_row = existing or CollectionSession(date=selected_date, created_by_id=current_user.id)
+        apply_snapshot(session_row, totals, physical)
         session_row.notes = (form.notes.data or "").strip() or None
-        session_row.updated_at = datetime.utcnow()
         if not existing:
             db.session.add(session_row)
         db.session.commit()

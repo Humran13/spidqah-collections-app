@@ -8,6 +8,9 @@ def _bool(value, default=False):
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-in-production")
 
@@ -26,6 +29,12 @@ class Config:
     REMEMBER_COOKIE_HTTPONLY = True
 
     ORG_NAME = os.environ.get("ORG_NAME", "SPIDQAH")
+
+    # Persistent storage for Admin-uploaded files (the PWA logo). In Docker
+    # this points at a named volume so uploads survive rebuilds/restarts.
+    # Never inside the git checkout.
+    UPLOAD_DIR = os.environ.get("UPLOAD_DIR") or os.path.join(BASE_DIR, "instance", "uploads")
+    MAX_CONTENT_LENGTH = 3 * 1024 * 1024
     CURRENCY_CODE = "UGX"
     APP_TIMEZONE = "Africa/Kampala"
 

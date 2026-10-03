@@ -1,0 +1,7 @@
+{# Filtered grand totals. Values are computed on the server over the whole filtered result set. #}
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-3" id="report-totals">
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Mukululo Total</div><div class="fw-semibold">{{ totals.MUKULULO | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Friday Total</div><div class="fw-semibold">{{ totals.FRIDAY | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Sunday Total</div><div class="fw-semibold">{{ totals.SUNDAY | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100 border-success"><div class="small text-muted">GRAND TOTAL</div><div class="fw-bold fs-5 text-success">{{ totals.GRAND | ugx }}</div></div></div>
+</div>

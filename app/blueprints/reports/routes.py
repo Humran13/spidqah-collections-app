@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app
 from flask_login import login_required
@@ -21,27 +21,23 @@ from app.services.totals import (
     chikumi_100_totals,
 )
 from app.services.banking import awaiting_banking
-from app.services.reports import annual_contributor_ranking, annual_contributor_monthly_breakdown
+from app.services.reports import (
+    annual_contributor_ranking,
+    annual_contributor_monthly_breakdown,
+    contributor_report_rows,
+    daily_category_rows,
+)
+from app.services.report_filters import range_from_args, export_url
 from app.services.pdf import generate_statement_pdf, generate_batch_statements_pdf
 from app.blueprints.reports.csv_utils import csv_response
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/reports")
 
 
-def _parse_date(value, default=None):
-    if not value:
-        return default
-    try:
-        return datetime.strptime(value, "%Y-%m-%d").date()
-    except ValueError:
-        return default
-
-
 def _range_from_request():
-    today = date.today()
-    start = _parse_date(request.args.get("date_from"), date(today.year, 1, 1))
-    end = _parse_date(request.args.get("date_to"), today)
-    return start, end
+    """Shared filter parsing: Exact Date wins over From/To. See
+    app.services.report_filters."""
+    return range_from_args(request.args)
 
 
 @reports_bp.route("/")
@@ -53,25 +49,22 @@ def index():
 @reports_bp.route("/contributor")
 @login_required
 def contributor_report():
-    start, end = _range_from_request()
-    contributors = Contributor.query.filter(Contributor.merged_into_id.is_(None), Contributor.active.is_(True)).order_by(Contributor.name).all()
-    rows = []
-    for c in contributors:
-        mukululo = contributor_detail_total([CollectionType.MUKULULO], start, end, c.id)
-        friday = contributor_detail_total([CollectionType.FRIDAY], start, end, c.id)
-        sunday = contributor_detail_total([CollectionType.SUNDAY], start, end, c.id)
-        total = mukululo + friday + sunday
-        if total > 0:
-            rows.append({"contributor": c, "mukululo": mukululo, "friday": friday, "sunday": sunday, "total": total})
-    rows.sort(key=lambda r: r["total"], reverse=True)
+    rng = _range_from_request()
+    rows, totals = contributor_report_rows(rng.start, rng.end)
 
     if request.args.get("format") == "csv":
+        body = [[r["contributor"].name, r["mukululo"], r["friday"], r["sunday"], r["total"]] for r in rows]
+        body.append(["GRAND TOTAL", totals["MUKULULO"], totals["FRIDAY"], totals["SUNDAY"], totals["GRAND"]])
         return csv_response(
             "contributor_report.csv",
             ["Contributor", "Mukululo", "Friday", "Sunday", "Total"],
-            [[r["contributor"].name, r["mukululo"], r["friday"], r["sunday"], r["total"]] for r in rows],
+            body,
         )
-    return render_template("reports/contributor_report.html", rows=rows, start=start, end=end)
+    return render_template(
+        "reports/contributor_report.html", rows=rows, totals=totals, rng=rng,
+        start=rng.start, end=rng.end,
+        csv_url=export_url("reports.contributor_report", rng),
+    )
 
 
 @reports_bp.route("/collection/<fund_key>")
@@ -87,7 +80,8 @@ def collection_report(fund_key):
         flash("Unknown report.", "danger")
         return redirect(url_for("reports.index"))
     title, types = mapping[fund_key]
-    start, end = _range_from_request()
+    rng = _range_from_request()
+    start, end = rng.start, rng.end
 
     q = ContributionTransaction.query.filter(
         ContributionTransaction.status == TransactionStatus.ACTIVE,
@@ -113,14 +107,37 @@ def collection_report(fund_key):
 
     return render_template(
         "reports/collection_report.html", title=title, fund_key=fund_key,
-        daily_rows=daily_rows, total=total, start=start, end=end,
+        daily_rows=daily_rows, total=total, start=start, end=end, rng=rng,
+        csv_url=export_url("reports.collection_report", rng, fund_key=fund_key),
+    )
+
+
+@reports_bp.route("/combined")
+@login_required
+def combined_report():
+    rng = _range_from_request()
+    rows, totals = daily_category_rows(rng.start, rng.end)
+
+    if request.args.get("format") == "csv":
+        body = [[r["date"].isoformat(), r["mukululo"], r["friday"], r["sunday"], r["total"]] for r in rows]
+        body.append(["GRAND TOTAL", totals["MUKULULO"], totals["FRIDAY"], totals["SUNDAY"], totals["GRAND"]])
+        return csv_response(
+            "combined_report.csv",
+            ["Date", "Mukululo", "Friday", "Sunday", "Total"],
+            body,
+        )
+    return render_template(
+        "reports/combined_report.html", rows=rows, totals=totals, rng=rng,
+        start=rng.start, end=rng.end,
+        csv_url=export_url("reports.combined_report", rng),
     )
 
 
 @reports_bp.route("/chikumi100")
 @login_required
 def chikumi100_report():
-    start, end = _range_from_request()
+    rng = _range_from_request()
+    start, end = rng.start, rng.end
     contributor = Contributor.query.filter_by(name_normalized="CHIKUMI 100").first()
     total = chikumi_100_totals(start, end)
 
@@ -139,7 +156,8 @@ def chikumi100_report():
 
     return render_template(
         "reports/chikumi100_report.html", total=total, monthly=monthly,
-        start=start, end=end, contributor=contributor,
+        start=start, end=end, contributor=contributor, rng=rng,
+        csv_url=None,
     )
 
 
@@ -166,7 +184,8 @@ def monthly_collection_report():
 @reports_bp.route("/banking")
 @login_required
 def banking_report():
-    start, end = _range_from_request()
+    rng = _range_from_request()
+    start, end = rng.start, rng.end
     deposits = BankDeposit.query.filter(
         BankDeposit.deposit_date >= start, BankDeposit.deposit_date <= end
     ).order_by(BankDeposit.deposit_date.asc()).all()
@@ -178,7 +197,10 @@ def banking_report():
             ["Date", "Fund", "Bank Account", "Amount", "Reference", "Slip Ref"],
             [[d.deposit_date.isoformat(), d.fund.value, d.bank_account.name, d.amount, d.reference or "", d.slip_reference or ""] for d in deposits],
         )
-    return render_template("reports/banking_report.html", deposits=deposits, total=total, start=start, end=end)
+    return render_template(
+        "reports/banking_report.html", deposits=deposits, total=total, start=start, end=end, rng=rng,
+        csv_url=export_url("reports.banking_report", rng),
+    )
 
 
 @reports_bp.route("/awaiting-banking")

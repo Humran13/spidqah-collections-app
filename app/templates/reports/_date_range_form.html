@@ -1,6 +1,38 @@
-<form class="d-flex flex-wrap gap-2 mb-3" method="get">
-  <input type="date" name="date_from" value="{{ start.isoformat() }}" class="form-control w-auto">
-  <input type="date" name="date_to" value="{{ end.isoformat() }}" class="form-control w-auto">
-  <button type="submit" class="btn btn-outline-secondary">Filter</button>
-  {% if csv_url %}<a href="{{ csv_url }}&date_from={{ start.isoformat() }}&date_to={{ end.isoformat() }}" class="btn btn-outline-success">Export CSV</a>{% endif %}
+{# Shared report filter: Exact Date, or From/To. Exact Date overrides From/To on the server. #}
+<form class="card card-body mb-3" method="get" id="report-filter-form">
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-4">
+      <label class="form-label fw-semibold" for="exact_date">Exact date</label>
+      <input type="date" id="exact_date" name="exact_date" value="{{ rng.exact.isoformat() if rng.exact else '' }}" class="form-control form-control-lg">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label fw-semibold" for="date_from">From</label>
+      <input type="date" id="date_from" name="date_from" value="{{ (request.args.get('date_from') or '') if rng.is_exact else (request.args.get('date_from') or rng.start.isoformat()) }}" class="form-control form-control-lg">
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label fw-semibold" for="date_to">To</label>
+      <input type="date" id="date_to" name="date_to" value="{{ (request.args.get('date_to') or '') if rng.is_exact else (request.args.get('date_to') or rng.end.isoformat()) }}" class="form-control form-control-lg">
+    </div>
+    <div class="col-12 col-md-2 d-grid">
+      <button type="submit" class="btn btn-outline-secondary btn-lg">Filter</button>
+    </div>
+  </div>
+  <div class="form-text">Exact date overrides From/To when set. Clear it to use a From/To range.</div>
+  {% if csv_url %}<div class="mt-2"><a href="{{ csv_url }}" class="btn btn-outline-success">Export CSV</a></div>{% endif %}
 </form>
+<script>
+  // UI convenience only: the server applies Exact Date precedence itself.
+  (function () {
+    var form = document.getElementById('report-filter-form');
+    if (!form) return;
+    var exact = form.elements['exact_date'];
+    var from = form.elements['date_from'];
+    var to = form.elements['date_to'];
+    exact.addEventListener('change', function () {
+      if (exact.value) { from.value = ''; to.value = ''; }
+    });
+    [from, to].forEach(function (el) {
+      el.addEventListener('change', function () { if (el.value) exact.value = ''; });
+    });
+  })();
+</script>

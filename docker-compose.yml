@@ -22,6 +22,10 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-spidqah}:${POSTGRES_PASSWORD:-spidqah}@db:5432/${POSTGRES_DB:-spidqah}
+      UPLOAD_DIR: /app/instance/uploads
+    volumes:
+      # Admin-uploaded files (PWA logo). Persists across rebuilds and restarts.
+      - spidqah_uploads:/app/instance/uploads
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:5000"
     depends_on:
@@ -36,3 +40,4 @@ services:
 
 volumes:
   spidqah_postgres_data:
+  spidqah_uploads:

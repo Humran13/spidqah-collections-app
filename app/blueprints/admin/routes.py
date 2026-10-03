@@ -17,7 +17,8 @@ from app.models import (
 from app.services.audit import log_audit
 from app.services.settings import get_go_live_date, set_go_live_date, set_setting, get_setting, ORG_NAME_KEY
 from app.utils import roles_required, parse_amount_ugx_allow_zero
-from app.blueprints.admin.forms import UserForm, HistoricalTotalForm, UnlockForm, SettingsForm, MergeContributorForm
+from app.blueprints.admin.forms import UserForm, HistoricalTotalForm, UnlockForm, SettingsForm, MergeContributorForm, PwaSettingsForm
+from app.services import pwa as pwa_service
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -336,3 +337,45 @@ def merge_contributors():
         return redirect(url_for("contributors.profile", contributor_id=target.id))
 
     return render_template("admin/merge_contributors.html", form=form)
+
+
+# --- PWA / app appearance -----------------------------------------------------
+
+@admin_bp.route("/pwa", methods=["GET", "POST"])
+@login_required
+@roles_required(*ADMIN_ONLY)
+def pwa_settings():
+    form = PwaSettingsForm()
+    current = pwa_service.get_pwa_settings()
+    if request.method == "GET":
+        form.app_name.data = current["app_name"]
+        form.short_name.data = current["short_name"]
+
+    if form.validate_on_submit():
+        master_png = None
+        upload = form.logo.data
+        if upload is not None and getattr(upload, "filename", ""):
+            try:
+                data = upload.stream.read(pwa_service.MAX_LOGO_BYTES + 1)
+                master_png = pwa_service.encode_master(pwa_service.validate_logo_bytes(data))
+            except pwa_service.LogoError as exc:
+                flash(str(exc), "danger")
+                return render_template("admin/pwa_settings.html", form=form, current=current)
+
+        before = pwa_service.settings_snapshot()
+        set_setting(pwa_service.APP_NAME_KEY, form.app_name.data.strip(), user_id=current_user.id)
+        set_setting(pwa_service.SHORT_NAME_KEY, form.short_name.data.strip(), user_id=current_user.id)
+        if master_png is not None:
+            pwa_service.store_logo(master_png, user_id=current_user.id)
+        elif form.remove_logo.data:
+            pwa_service.remove_logo(user_id=current_user.id)
+        else:
+            pwa_service.bump_version(user_id=current_user.id)
+
+        after = pwa_service.settings_snapshot()
+        log_audit("AppSetting", None, AuditAction.EDIT, before=before, after=after, reason="PWA / app settings")
+        db.session.commit()
+        flash("App settings saved. Installed apps pick up the change on their next refresh.", "success")
+        return redirect(url_for("admin.pwa_settings"))
+
+    return render_template("admin/pwa_settings.html", form=form, current=current)

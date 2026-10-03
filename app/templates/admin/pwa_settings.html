@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field %}
+{% block title %}App settings{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="h4 mb-1">App name &amp; logo</h1>
+        <p class="text-muted small">Used for the browser title, the installed app name and its home-screen icon. Changes take effect for everyone after they reload.</p>
+
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <img src="{{ url_for('pwa.icon', name='icon-192.png', v=current.version) }}" alt="" width="72" height="72" class="rounded border">
+          <div class="small text-muted">
+            {% if current.has_logo %}Custom logo in use.{% else %}Default icon in use (no logo uploaded yet).{% endif %}
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+          {{ form.hidden_tag() }}
+          {{ field(form.app_name) }}
+          {{ field(form.short_name) }}
+          {{ field(form.logo) }}
+          <p class="form-text mt-n2 mb-3">Square or landscape logos work; the app keeps the aspect ratio and adds padding. Files are checked by content, not by name. Max 2 MB, 128–4000 px per side.</p>
+          {{ field(form.remove_logo) }}
+          <button type="submit" class="btn btn-success btn-lg w-100">Save app settings</button>
+        </form>
+      </div>
+    </div>
+    <a class="btn btn-link mt-2" href="{{ url_for('admin.dashboard') }}">Back to Admin</a>
+  </div>
+</div>
+{% endblock %}

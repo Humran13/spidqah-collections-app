@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN useradd --create-home --shell /bin/bash appuser \
+    && mkdir -p /app/instance/uploads \
     && chown -R appuser:appuser /app
 USER appuser
 

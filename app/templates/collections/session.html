@@ -2,12 +2,23 @@
 {% from "_macros.html" import field %}
 {% block title %}Daily Close{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">Daily Close / Reconciliation - {{ selected_date.strftime('%d %b %Y') }}</h1>
+{# ONE reconciliation date for the whole screen: changing it reloads both the figures and the physical count for that day. #}
+<div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+  <h1 class="h4 mb-0">Daily Close / Reconciliation</h1>
+  <form method="get" class="d-flex align-items-end gap-2">
+    <div>
+      <label class="form-label small fw-semibold mb-1" for="reconciliation-date">Reconciliation date</label>
+      <input type="date" id="reconciliation-date" name="date" value="{{ selected_date.isoformat() }}" class="form-control form-control-lg" onchange="this.form.submit()">
+    </div>
+    <noscript><button type="submit" class="btn btn-outline-secondary btn-lg">Show</button></noscript>
+  </form>
+</div>
+<p class="text-muted small mb-3">Collections and physical cash counted are both for <strong>{{ selected_date.strftime('%d %b %Y') }}</strong>.</p>
 
 <div class="row g-3">
   <div class="col-12 col-lg-5">
     <div class="card">
-      <div class="card-header bg-white fw-semibold">System Totals</div>
+      <div class="card-header bg-white fw-semibold">Collections on {{ selected_date.strftime('%d %b %Y') }}</div>
       <div class="card-body">
         <div class="d-flex justify-content-between border-bottom py-2"><span>Mukululo</span><strong>{{ totals.MUKULULO | ugx }}</strong></div>
         <div class="d-flex justify-content-between border-bottom py-2"><span>Friday</span><strong>{{ totals.FRIDAY | ugx }}</strong></div>
@@ -18,18 +29,21 @@
   </div>
   <div class="col-12 col-lg-7">
     <div class="card">
+      <div class="card-header bg-white fw-semibold">Physical cash counted on {{ selected_date.strftime('%d %b %Y') }}</div>
       <div class="card-body">
-        <form method="post">
+        <form method="post" action="{{ url_for('collections.session_close', date=selected_date.isoformat()) }}">
           {{ form.hidden_tag() }}
-          {{ field(form.date) }}
+          <input type="hidden" name="reconciliation_date" value="{{ selected_date.isoformat() }}">
           {{ field(form.physical_cash_counted) }}
           {{ field(form.notes) }}
-          <button type="submit" class="btn btn-success btn-lg w-100">Save daily close</button>
+          <button type="submit" class="btn btn-success btn-lg w-100">Save daily close for {{ selected_date.strftime('%d %b %Y') }}</button>
         </form>
         {% if existing %}
         <hr>
         <p class="mb-1">Status: <span class="badge text-bg-{{ 'success' if existing.status.value == 'BALANCED' else ('danger' if existing.status.value == 'SHORT' else 'warning') }}">{{ existing.status.value }}</span></p>
         <p class="mb-0">Difference: {{ existing.difference | ugx }}</p>
+        {% else %}
+        <p class="text-muted small mt-3 mb-0">No daily close saved for this date yet.</p>
         {% endif %}
       </div>
     </div>

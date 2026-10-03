@@ -1,37 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Contributor Report{% endblock %}
+{% block title %}Mukululo, Friday &amp; Sunday Report{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">Contributor Report</h1>
+<h1 class="h4 mb-1">Mukululo, Friday &amp; Sunday - Combined</h1>
+<p class="text-muted small mb-3">One row per day. Each category is shown in its own column; nothing is counted twice.</p>
 {% include "reports/_date_range_form.html" %}
 {% include "reports/_totals_cards.html" %}
 <div class="d-md-none">
   {% for r in rows %}
   <div class="mobile-row-card">
-    <div class="mrc-title"><a href="{{ url_for('contributors.profile', contributor_id=r.contributor.id) }}">{{ r.contributor.name }}</a></div>
+    <div class="mrc-title">{{ r.date.strftime('%d %b %Y') }}</div>
     <div class="d-flex justify-content-between small mt-2"><span>Mukululo</span><span>{{ r.mukululo | ugx }}</span></div>
     <div class="d-flex justify-content-between small"><span>Friday</span><span>{{ r.friday | ugx }}</span></div>
     <div class="d-flex justify-content-between small"><span>Sunday</span><span>{{ r.sunday | ugx }}</span></div>
-    <div class="d-flex justify-content-between fw-bold border-top mt-1 pt-1"><span>Total</span><span>{{ r.total | ugx }}</span></div>
+    <div class="d-flex justify-content-between fw-bold border-top mt-1 pt-1"><span>Day total</span><span>{{ r.total | ugx }}</span></div>
   </div>
   {% else %}
-  <div class="text-center text-muted py-4">No contributions in this range.</div>
+  <div class="text-center text-muted py-4">No entries in this range.</div>
   {% endfor %}
 </div>
 <div class="card d-none d-md-block">
   <div class="table-responsive">
     <table class="table table-hover mb-0">
-      <thead class="table-light"><tr><th>Contributor</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">Total</th></tr></thead>
+      <thead class="table-light"><tr><th>Date</th><th class="text-end">Mukululo</th><th class="text-end">Friday</th><th class="text-end">Sunday</th><th class="text-end">Day total</th></tr></thead>
       <tbody>
         {% for r in rows %}
         <tr>
-          <td><a href="{{ url_for('contributors.profile', contributor_id=r.contributor.id) }}">{{ r.contributor.name }}</a></td>
+          <td>{{ r.date.strftime('%d %b %Y') }}</td>
           <td class="text-end">{{ r.mukululo | ugx }}</td>
           <td class="text-end">{{ r.friday | ugx }}</td>
           <td class="text-end">{{ r.sunday | ugx }}</td>
           <td class="text-end fw-bold">{{ r.total | ugx }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-center text-muted py-4">No contributions in this range.</td></tr>
+        <tr><td colspan="5" class="text-center text-muted py-4">No entries in this range.</td></tr>
         {% endfor %}
       </tbody>
     </table>

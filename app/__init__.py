@@ -1,6 +1,7 @@
+import hashlib
 import os
 
-from flask import Flask
+from flask import Flask, request
 
 from app.config import get_config
 from app.extensions import db, migrate, login_manager, csrf, limiter
@@ -29,8 +30,10 @@ def create_app(config_name=None):
     from app.blueprints.banking.routes import banking_bp
     from app.blueprints.reports.routes import reports_bp
     from app.blueprints.admin.routes import admin_bp
+    from app.blueprints.pwa.routes import pwa_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(pwa_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(collections_bp)
     app.register_blueprint(contributors_bp)
@@ -38,8 +41,15 @@ def create_app(config_name=None):
     app.register_blueprint(reports_bp)
     app.register_blueprint(admin_bp)
 
+    from flask_login import current_user
+
     from app.utils import format_ugx, to_local
     from app.services.settings import get_go_live_date
+    from app.services import pwa as pwa_service
+
+    # Static asset fingerprint: changes whenever a CSS/JS file changes, so
+    # browsers (and the service worker cache) never keep stale app code.
+    app.config["ASSET_VERSION"] = _static_fingerprint(os.path.join(app.root_path, "static"))
 
     @app.template_filter("ugx")
     def ugx_filter(amount):
@@ -57,7 +67,19 @@ def create_app(config_name=None):
             go_live = get_go_live_date()
         except Exception:
             go_live = app.config["DEFAULT_GO_LIVE_DATE"]
-        return {"org_name": org_name, "go_live_date": go_live}
+        try:
+            pwa = pwa_service.get_pwa_settings()
+        except Exception:
+            pwa = {"app_name": pwa_service.DEFAULT_APP_NAME, "short_name": pwa_service.DEFAULT_SHORT_NAME,
+                   "version": "1", "has_logo": False}
+        return {
+            "org_name": org_name,
+            "go_live_date": go_live,
+            "app_name": pwa["app_name"],
+            "short_name": pwa["short_name"],
+            "pwa_version": pwa["version"],
+            "asset_version": app.config["ASSET_VERSION"],
+        }
 
     from app.cli import register_cli
     register_cli(app)
@@ -70,6 +92,22 @@ def create_app(config_name=None):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "same-origin")
+        # Financial pages must never be kept by the browser or a shared cache
+        # and shown later as if they were live. Static assets are exempt.
+        if not request.path.startswith("/static/") and current_user.is_authenticated:
+            response.headers["Cache-Control"] = "no-store, private"
         return response
 
     return app
+
+
+def _static_fingerprint(static_dir):
+    digest = hashlib.sha256()
+    for root, _dirs, files in sorted(os.walk(static_dir)):
+        for name in sorted(files):
+            path = os.path.join(root, name)
+            digest.update(os.path.relpath(path, static_dir).encode("utf-8"))
+            with open(path, "rb") as fh:
+                digest.update(fh.read())
+    return digest.hexdigest()[:12]
+

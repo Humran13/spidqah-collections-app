@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, SelectField, PasswordField, BooleanField, IntegerField, DateField, TextAreaField
 from wtforms.validators import DataRequired, Optional, Length, Email, NumberRange
 
@@ -40,3 +41,10 @@ class SettingsForm(FlaskForm):
 class MergeContributorForm(FlaskForm):
     source_id = SelectField("Duplicate contributor (will be merged away)", coerce=int, validators=[DataRequired()])
     target_id = SelectField("Keep this contributor", coerce=int, validators=[DataRequired()])
+
+
+class PwaSettingsForm(FlaskForm):
+    app_name = StringField("App / display name", validators=[DataRequired(), Length(max=80)])
+    short_name = StringField("Short name (under the home-screen icon)", validators=[DataRequired(), Length(max=12)])
+    logo = FileField("Logo (PNG, JPEG or WEBP, up to 2 MB)", validators=[FileAllowed(["png", "jpg", "jpeg", "webp"], "Upload a PNG, JPEG or WEBP image.")])
+    remove_logo = BooleanField("Remove the custom logo and use the default icon")

@@ -33,7 +33,7 @@
       {% if can_edit and t.status.value == 'ACTIVE' %}
         <div class="mrc-actions">
           <a href="{{ url_for('collections.edit_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
-          <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Void</a>
+          <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Delete</a>
         </div>
       {% endif %}
     </div>
@@ -61,7 +61,7 @@
           <td class="text-end">
             {% if can_edit and t.status.value == 'ACTIVE' %}
               <a href="{{ url_for('collections.edit_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
-              <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Void</a>
+              <a href="{{ url_for('collections.void_transaction', txn_id=t.id) }}" class="btn btn-sm btn-outline-danger">Delete</a>
             {% endif %}
           </td>
         </tr>
