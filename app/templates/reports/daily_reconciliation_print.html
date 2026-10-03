@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Daily Reconciliation Report - {{ org_name }}</title>
+  <style>
+    body { font-family: "Segoe UI", system-ui, Arial, sans-serif; color: #111; margin: 1.5rem; font-size: 12px; }
+    h1 { font-size: 18px; margin: 0; }
+    h2 { font-size: 14px; margin: 0.25rem 0 0.75rem; font-weight: normal; }
+    .meta { color: #444; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { border-bottom: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
+    th { background: #f0f3f1; font-weight: 600; }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+    .summary { width: auto; min-width: 22rem; }
+    .summary td { border: none; padding: 2px 8px 2px 0; }
+    .summary td.num { font-weight: 600; }
+    .actions { margin-bottom: 1rem; }
+    .actions button { font-size: 13px; padding: 6px 12px; }
+    @media print {
+      .actions { display: none; }
+      body { margin: 0.5cm; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions"><button type="button" onclick="window.print()">Print / Save as PDF</button></div>
+
+  <h1>{{ org_name }} Collections</h1>
+  <h2>Daily Reconciliation Report</h2>
+  <div class="meta">Period: <strong>{{ period }}</strong><br>
+    Generated {{ now_label }}. Physical cash closings only - not the bank position.</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Collection date</th>
+        <th class="num">Mukululo</th>
+        <th class="num">Friday</th>
+        <th class="num">Sunday</th>
+        <th class="num">Expected</th>
+        <th class="num">Physical</th>
+        <th class="num">Difference</th>
+        <th>Status</th>
+        <th>Closed by</th>
+        <th>Closed at</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.date.strftime('%d %b %Y') }}</td>
+        <td class="num">{{ r.mukululo | ugx }}</td>
+        <td class="num">{{ r.friday | ugx }}</td>
+        <td class="num">{{ r.sunday | ugx }}</td>
+        <td class="num">{{ r.expected | ugx }}</td>
+        <td class="num">{{ r.physical | ugx }}</td>
+        <td class="num">{{ r.difference | sugx }}</td>
+        <td>{{ r.status | title }}</td>
+        <td>{{ r.closed_by or "-" }}</td>
+        <td>{{ r.closed_at | localtime("%d %b %Y, %I:%M %p") }}</td>
+        <td>{{ r.notes }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11">No Daily Closes in this period.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Summary</h2>
+  <table class="summary">
+    <tr><td>Days closed</td><td class="num">{{ summary.days }}</td></tr>
+    <tr><td>Total expected</td><td class="num">{{ summary.expected | ugx }}</td></tr>
+    <tr><td>Total physical counted</td><td class="num">{{ summary.physical | ugx }}</td></tr>
+    <tr><td>Net difference</td><td class="num">{{ summary.net_difference | sugx }}</td></tr>
+    <tr><td>Balanced</td><td class="num">{{ summary.balanced }}</td></tr>
+    <tr><td>Short</td><td class="num">{{ summary.short }}</td></tr>
+    <tr><td>Over</td><td class="num">{{ summary.over }}</td></tr>
+    <tr><td>Total short (sum of shortages)</td><td class="num">{{ summary.total_short | ugx }}</td></tr>
+    <tr><td>Total over (sum of overages)</td><td class="num">{{ summary.total_over | ugx }}</td></tr>
+  </table>
+</body>
+</html>

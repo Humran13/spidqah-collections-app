@@ -53,6 +53,11 @@ def _status_for(difference: int) -> SessionStatus:
     return SessionStatus.SHORT
 
 
+def status_for_difference(difference: int) -> SessionStatus:
+    """Public: the BALANCED / SHORT / OVER rule (difference = physical - expected)."""
+    return _status_for(difference)
+
+
 def apply_snapshot(row: CollectionSession, totals: dict, physical: int):
     """Write system totals, physical count, variance and status onto a close.
     Variance is always computed from the same-day totals passed in."""

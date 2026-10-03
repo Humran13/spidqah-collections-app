@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, current_app
 from flask_login import login_required
@@ -27,7 +27,10 @@ from app.services.reports import (
     contributor_report_rows,
     daily_category_rows,
 )
-from app.services.report_filters import range_from_args, export_url
+from app.services.report_filters import range_from_args, export_url, resolve_period
+from app.services.daily_reconciliation import daily_reconciliation_rows, summarize
+from app.utils import roles_required, to_local
+from app.models import UserRole
 from app.services.pdf import generate_statement_pdf, generate_batch_statements_pdf
 from app.blueprints.reports.csv_utils import csv_response
 
@@ -130,6 +133,61 @@ def combined_report():
         "reports/combined_report.html", rows=rows, totals=totals, rng=rng,
         start=rng.start, end=rng.end,
         csv_url=export_url("reports.combined_report", rng),
+    )
+
+
+DAILY_RECON_ROLES = (UserRole.ADMIN, UserRole.DATA_ENTRY)
+
+
+def _period_label(rng, filter_args):
+    if rng.is_exact:
+        return f"Exact date: {rng.start.strftime('%d %b %Y')}"
+    if "date_from" in filter_args:
+        return f"{rng.start.strftime('%d %b %Y')} to {rng.end.strftime('%d %b %Y')}"
+    if "month" in filter_args:
+        return rng.start.strftime("%B %Y")
+    return f"Year {rng.start.year}"
+
+
+@reports_bp.route("/daily-reconciliation")
+@login_required
+@roles_required(*DAILY_RECON_ROLES)
+def daily_reconciliation():
+    """Physical cash closings over time. Read-only: reads the existing Daily
+    Close records; never changes them. Same visibility as the Daily Close
+    screen, because it shows physical counts and variances."""
+    rng, filter_args = resolve_period(request.args)
+    rows = daily_reconciliation_rows(rng.start, rng.end)
+    summary = summarize(rows)
+    period = _period_label(rng, filter_args)
+
+    if request.args.get("format") == "csv":
+        body = [[
+            r["date"].isoformat(), r["mukululo"], r["friday"], r["sunday"], r["expected"],
+            r["physical"], r["difference"], r["status"], r["closed_by"],
+            r["closed_at"].strftime("%Y-%m-%d %H:%M") if r["closed_at"] else "", r["notes"],
+        ] for r in rows]
+        body.append([
+            "GRAND TOTAL", summary["mukululo"], summary["friday"], summary["sunday"],
+            summary["expected"], summary["physical"], summary["net_difference"], "", "", "", "",
+        ])
+        return csv_response(
+            "daily_reconciliation.csv",
+            ["Collection Date", "Mukululo", "Friday", "Sunday", "Expected Cash", "Physical Count",
+             "Difference", "Status", "Closed By", "Closed At", "Notes"],
+            body,
+        )
+
+    if request.args.get("format") == "print":
+        return render_template("reports/daily_reconciliation_print.html", rows=rows, summary=summary,
+                               period=period, org_name=current_app.config["ORG_NAME"],
+                               now_label=to_local(datetime.utcnow()).strftime("%d %b %Y, %I:%M %p"))
+
+    return render_template(
+        "reports/daily_reconciliation.html", rows=rows, summary=summary, rng=rng,
+        filter_args=filter_args, period=period, show_month_year=True,
+        csv_url=url_for("reports.daily_reconciliation", format="csv", **filter_args),
+        print_url=url_for("reports.daily_reconciliation", format="print", **filter_args),
     )
 
 

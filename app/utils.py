@@ -16,6 +16,16 @@ def format_ugx(amount) -> str:
     return f"{sign}UGX {abs(amount):,}"
 
 
+def format_signed_ugx(amount) -> str:
+    """+UGX 3,000 / -UGX 2,000 / UGX 0 - the sign is always written out."""
+    amount = int(amount or 0)
+    if amount > 0:
+        return f"+UGX {amount:,}"
+    if amount < 0:
+        return f"-UGX {abs(amount):,}"
+    return "UGX 0"
+
+
 def to_local(dt: datetime):
     if dt is None:
         return None

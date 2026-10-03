@@ -55,6 +55,11 @@ def create_app(config_name=None):
     def ugx_filter(amount):
         return format_ugx(amount)
 
+    @app.template_filter("sugx")
+    def signed_ugx_filter(amount):
+        from app.utils import format_signed_ugx
+        return format_signed_ugx(amount)
+
     @app.template_filter("localtime")
     def localtime_filter(dt, fmt="%d %b %Y, %H:%M"):
         local = to_local(dt)

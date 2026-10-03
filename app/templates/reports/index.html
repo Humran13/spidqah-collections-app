@@ -14,6 +14,9 @@
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.banking_report') }}">Banking Report</a>
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.awaiting_banking_report') }}">Awaiting Banking Report</a>
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.bank_reconciliation_report') }}">Bank Reconciliation Report</a>
+  {% if current_user.role.value in ['ADMIN', 'DATA_ENTRY'] %}
+  <a class="list-group-item list-group-item-action" href="{{ url_for('reports.daily_reconciliation') }}">Daily Reconciliation <span class="text-muted small">(physical cash closings)</span></a>
+  {% endif %}
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.annual_summary') }}">Annual Summary</a>
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.ranking') }}">Annual Contributor Ranking</a>
   <a class="list-group-item list-group-item-action" href="{{ url_for('reports.statement') }}">Individual Annual Statement</a>

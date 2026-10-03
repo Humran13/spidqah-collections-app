@@ -1,4 +1,13 @@
-{# Shared report filter: Exact Date, or From/To. Exact Date overrides From/To on the server. #}
+{# Shared report filter. Exact Date overrides From/To on the server.
+   Pass show_month_year=True (and filter_args) to also offer Month / Year. #}
+{% set fa = filter_args or {} %}
+{% if show_month_year or rng.is_exact %}
+  {% set from_value = request.args.get('date_from') or '' %}
+  {% set to_value = request.args.get('date_to') or '' %}
+{% else %}
+  {% set from_value = request.args.get('date_from') or rng.start.isoformat() %}
+  {% set to_value = request.args.get('date_to') or rng.end.isoformat() %}
+{% endif %}
 <form class="card card-body mb-3" method="get" id="report-filter-form">
   <div class="row g-2 align-items-end">
     <div class="col-12 col-md-4">
@@ -7,32 +16,70 @@
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label fw-semibold" for="date_from">From</label>
-      <input type="date" id="date_from" name="date_from" value="{{ (request.args.get('date_from') or '') if rng.is_exact else (request.args.get('date_from') or rng.start.isoformat()) }}" class="form-control form-control-lg">
+      <input type="date" id="date_from" name="date_from" value="{{ from_value }}" class="form-control form-control-lg">
     </div>
     <div class="col-6 col-md-3">
       <label class="form-label fw-semibold" for="date_to">To</label>
-      <input type="date" id="date_to" name="date_to" value="{{ (request.args.get('date_to') or '') if rng.is_exact else (request.args.get('date_to') or rng.end.isoformat()) }}" class="form-control form-control-lg">
+      <input type="date" id="date_to" name="date_to" value="{{ to_value }}" class="form-control form-control-lg">
     </div>
     <div class="col-12 col-md-2 d-grid">
       <button type="submit" class="btn btn-outline-secondary btn-lg">Filter</button>
     </div>
   </div>
-  <div class="form-text">Exact date overrides From/To when set. Clear it to use a From/To range.</div>
-  {% if csv_url %}<div class="mt-2"><a href="{{ csv_url }}" class="btn btn-outline-success">Export CSV</a></div>{% endif %}
+  {% if show_month_year %}
+  <div class="row g-2 align-items-end mt-0">
+    <div class="col-6 col-md-4">
+      <label class="form-label fw-semibold" for="filter_month">Month</label>
+      <select id="filter_month" name="month" class="form-select form-select-lg">
+        <option value="">All months</option>
+        {% for m in range(1, 13) %}
+        <option value="{{ m }}" {{ 'selected' if fa.get('month') == m }}>{{ ['January','February','March','April','May','June','July','August','September','October','November','December'][m - 1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-6 col-md-3">
+      <label class="form-label fw-semibold" for="filter_year">Year</label>
+      <input type="number" id="filter_year" name="year" min="2000" max="2100" value="{{ fa.get('year', '') }}" class="form-control form-control-lg">
+    </div>
+    <div class="col-12 col-md-5 small text-muted">
+      Month and Year apply when no From/To range is set. Leave Month empty and set only Year for a whole year.
+    </div>
+  </div>
+  {% endif %}
+  <div class="form-text">Exact date overrides From/To{% if show_month_year %}; From/To overrides Month/Year{% endif %}. Clear a field to use the next option.</div>
+  {% if csv_url %}<div class="mt-2 d-flex flex-wrap gap-2">
+    <a href="{{ csv_url }}" class="btn btn-outline-success">Export CSV</a>
+    {% if print_url %}<a href="{{ print_url }}" target="_blank" rel="noopener" class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Print / PDF</a>{% endif %}
+  </div>{% endif %}
 </form>
 <script>
-  // UI convenience only: the server applies Exact Date precedence itself.
+  // UI convenience only: the server applies the precedence itself.
   (function () {
     var form = document.getElementById('report-filter-form');
     if (!form) return;
     var exact = form.elements['exact_date'];
     var from = form.elements['date_from'];
     var to = form.elements['date_to'];
+    var month = form.elements['month'];
+    var year = form.elements['year'];
+    function clear(list) { list.forEach(function (el) { if (el) el.value = ''; }); }
     exact.addEventListener('change', function () {
-      if (exact.value) { from.value = ''; to.value = ''; }
+      if (exact.value) clear([from, to, month, year]);
     });
     [from, to].forEach(function (el) {
-      el.addEventListener('change', function () { if (el.value) exact.value = ''; });
+      el.addEventListener('change', function () {
+        if (!el.value) return;
+        exact.value = '';
+        if (month) clear([month, year]);
+      });
+    });
+    [month, year].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener('change', function () {
+        if (!el.value) return;
+        exact.value = '';
+        clear([from, to]);
+      });
     });
   })();
 </script>

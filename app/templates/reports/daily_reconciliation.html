@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Daily Reconciliation{% endblock %}
+{% block content %}
+<h1 class="h4 mb-1">Daily Reconciliation</h1>
+<p class="text-muted small mb-3">
+  Physical cash closings: each Daily Close compares the cash the system expected for that day with the cash that was counted.
+  This is <strong>not</strong> the bank position - see Bank Reconciliation for that.
+</p>
+
+{% include "reports/_date_range_form.html" %}
+
+<div class="small text-muted mb-2">Showing: <strong>{{ period }}</strong></div>
+
+{# Summary cards cover the whole filtered result set. #}
+<div class="row row-cols-2 row-cols-md-4 g-2 mb-2" id="recon-summary">
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Days closed</div><div class="fw-bold fs-5">{{ summary.days }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Total expected</div><div class="fw-semibold">{{ summary.expected | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Total physical counted</div><div class="fw-semibold">{{ summary.physical | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100 border-secondary"><div class="small text-muted">Net difference</div><div class="fw-bold">{{ summary.net_difference | sugx }}</div></div></div>
+</div>
+<div class="row row-cols-2 row-cols-md-5 g-2 mb-3" id="recon-counts">
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted"><i class="bi bi-check-circle"></i> Balanced days</div><div class="fw-semibold">{{ summary.balanced }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted"><i class="bi bi-arrow-down-circle"></i> Short days</div><div class="fw-semibold">{{ summary.short }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted"><i class="bi bi-arrow-up-circle"></i> Over days</div><div class="fw-semibold">{{ summary.over }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Total short</div><div class="fw-semibold">{{ summary.total_short | ugx }}</div></div></div>
+  <div class="col"><div class="card card-body py-2 h-100"><div class="small text-muted">Total over</div><div class="fw-semibold">{{ summary.total_over | ugx }}</div></div></div>
+</div>
+
+{% macro status_badge(status) -%}
+  {% if status == 'BALANCED' %}<span class="badge text-bg-success"><i class="bi bi-check-circle"></i> Balanced</span>
+  {% elif status == 'SHORT' %}<span class="badge text-bg-danger"><i class="bi bi-arrow-down-circle"></i> Short</span>
+  {% else %}<span class="badge text-bg-warning"><i class="bi bi-arrow-up-circle"></i> Over</span>{% endif %}
+{%- endmacro %}
+
+{# Phone: one card per Daily Close. #}
+<div class="d-lg-none">
+  {% for r in rows %}
+  <div class="mobile-row-card" data-recon-date="{{ r.date.isoformat() }}">
+    <div class="mrc-top">
+      <div>
+        <div class="mrc-title">{{ r.date.strftime('%d %b %Y') }}</div>
+        <div class="mt-1">{{ status_badge(r.status) }}</div>
+      </div>
+      <div class="text-end">
+        <div class="small text-muted">Difference</div>
+        <div class="fw-bold">{{ r.difference | sugx }}</div>
+      </div>
+    </div>
+    <div class="mt-2 small">
+      <div class="d-flex justify-content-between"><span>Mukululo</span><span>{{ r.mukululo | ugx }}</span></div>
+      <div class="d-flex justify-content-between"><span>Friday</span><span>{{ r.friday | ugx }}</span></div>
+      <div class="d-flex justify-content-between"><span>Sunday</span><span>{{ r.sunday | ugx }}</span></div>
+    </div>
+    <div class="mt-2 small border-top pt-2">
+      <div class="d-flex justify-content-between"><span>Expected</span><span class="fw-semibold">{{ r.expected | ugx }}</span></div>
+      <div class="d-flex justify-content-between"><span>Physical count</span><span class="fw-semibold">{{ r.physical | ugx }}</span></div>
+    </div>
+    <div class="small text-muted mt-2">Closed by {{ r.closed_by or "-" }} &middot; {{ r.closed_at | localtime("%d %b %Y, %I:%M %p") }}</div>
+    {% if r.notes %}<div class="small mt-1"><span class="text-muted">Note:</span> {{ r.notes }}</div>{% endif %}
+    <div class="mt-2"><a class="btn btn-outline-secondary btn-sm py-2 w-100" href="{{ url_for('collections.session_close', date=r.date.isoformat()) }}">Open Daily Close</a></div>
+  </div>
+  {% else %}
+  <div class="text-center text-muted py-4">No Daily Closes in this period.</div>
+  {% endfor %}
+</div>
+
+{# Desktop: full report table. Notes are shown in a tooltip and kept short to keep the table readable. #}
+<div class="card d-none d-lg-block">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Collection date</th>
+          <th class="text-end">Mukululo</th>
+          <th class="text-end">Friday</th>
+          <th class="text-end">Sunday</th>
+          <th class="text-end">Expected</th>
+          <th class="text-end">Physical count</th>
+          <th class="text-end">Difference</th>
+          <th>Status</th>
+          <th>Closed by</th>
+          <th>Closed at</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr data-recon-date="{{ r.date.isoformat() }}">
+          <td class="text-nowrap"><a href="{{ url_for('collections.session_close', date=r.date.isoformat()) }}">{{ r.date.strftime('%d %b %Y') }}</a></td>
+          <td class="text-end text-nowrap">{{ r.mukululo | ugx }}</td>
+          <td class="text-end text-nowrap">{{ r.friday | ugx }}</td>
+          <td class="text-end text-nowrap">{{ r.sunday | ugx }}</td>
+          <td class="text-end text-nowrap fw-semibold">{{ r.expected | ugx }}</td>
+          <td class="text-end text-nowrap fw-semibold">{{ r.physical | ugx }}</td>
+          <td class="text-end text-nowrap fw-bold">{{ r.difference | sugx }}</td>
+          <td>{{ status_badge(r.status) }}</td>
+          <td class="small">{{ r.closed_by or "-" }}</td>
+          <td class="small text-nowrap">{{ r.closed_at | localtime("%d %b %Y, %I:%M %p") }}</td>
+          <td class="small text-muted" style="max-width: 14rem;" title="{{ r.notes }}">
+            {% if r.notes %}{{ r.notes[:40] }}{% if r.notes|length > 40 %}&hellip;{% endif %}{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" class="text-center text-muted py-4">No Daily Closes in this period.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
