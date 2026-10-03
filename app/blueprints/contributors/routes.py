@@ -8,7 +8,7 @@ from app.models import (
     Contributor,
     ContributionTransaction,
     CollectionType,
-    TransactionStatus,
+
     UserRole,
     AuditAction,
 )
@@ -84,9 +84,10 @@ def profile(contributor_id):
     friday_total = contributor_detail_total([CollectionType.FRIDAY], start, end, contributor.id)
     sunday_total = contributor_detail_total([CollectionType.SUNDAY], start, end, contributor.id)
 
+    # Voided entries stay visible (muted, marked VOIDED) for traceability.
+    # Totals above are computed separately and exclude them.
     txn_query = ContributionTransaction.query.filter(
         ContributionTransaction.contributor_id == contributor.id,
-        ContributionTransaction.status == TransactionStatus.ACTIVE,
         ContributionTransaction.date >= start,
         ContributionTransaction.date <= end,
     )
@@ -111,6 +112,9 @@ def profile(contributor_id):
         sunday_total=sunday_total,
         overall_total=mukululo_total + friday_total + sunday_total,
         transactions=transactions,
+        can_edit=current_user.role in (UserRole.ADMIN, UserRole.DATA_ENTRY),
+        reason_required=current_user.role != UserRole.ADMIN,
+        return_to=request.full_path.rstrip("?"),
     )
 
 

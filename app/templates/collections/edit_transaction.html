@@ -9,6 +9,7 @@
         <h1 class="h4 mb-1">Edit entry - {{ txn.contributor.name }}</h1>
         <p class="text-muted">All edits are recorded in the audit log with a reason.</p>
         <form method="post">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
           {{ form.hidden_tag() }}
           {{ field(form.contributor_name) }}
           {{ field(form.date) }}

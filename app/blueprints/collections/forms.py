@@ -19,11 +19,11 @@ class EditTransactionForm(FlaskForm):
     collection_type = SelectField("Collection", choices=COLLECTION_TYPE_CHOICES, validators=[DataRequired()])
     amount = StringField("Amount (UGX)", validators=[DataRequired()])
     note = StringField("Note", validators=[Optional(), Length(max=500)])
-    reason = TextAreaField("Reason for change", validators=[DataRequired(), Length(min=3, max=500)])
+    reason = TextAreaField("Reason for change", validators=[Optional(), Length(max=500)])
 
 
 class VoidTransactionForm(FlaskForm):
-    reason = TextAreaField("Reason for deleting", validators=[DataRequired(), Length(min=3, max=500)])
+    reason = TextAreaField("Reason for deleting", validators=[Optional(), Length(max=500)])
     confirm = BooleanField("I understand this removes the entry from all totals and reports (it stays in the audit log)",
                            validators=[DataRequired()])
 

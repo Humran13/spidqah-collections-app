@@ -373,8 +373,9 @@ class TestContributionEdit:
         db.session.refresh(txn)
         assert txn.status == TransactionStatus.ACTIVE
 
-    def test_reason_is_required(self, client, db, admin, seeded):
-        login(client, "admin1")
+    def test_reason_is_required_for_data_entry(self, client, db, admin, seeded):
+        make_user(db, "dataentry7", UserRole.DATA_ENTRY)
+        login(client, "dataentry7")
         txn = _friday_txn_for(seeded["ann"])
         client.post(f"/collections/transactions/{txn.id}/edit", data=_edit_payload(collection_type="MUKULULO", reason=""))
         db.session.refresh(txn)

@@ -167,6 +167,36 @@ def history():
     )
 
 
+def _reason_required():
+    """Only Admin may correct or delete without giving a reason. Decided by
+    role, never by username. Data Entry must always give a reason."""
+    return current_user.role != UserRole.ADMIN
+
+
+def _checked_reason(raw):
+    """Returns (reason_or_None, error_or_None). Enforced server-side."""
+    reason = (raw or "").strip()
+    if not reason:
+        if _reason_required():
+            return None, "A reason is required for this change."
+        return None, None
+    if len(reason) < 3:
+        return None, "The reason must be at least 3 characters (or left blank if you are an Admin)."
+    return reason, None
+
+
+def _label_reason(form, base):
+    form.reason.label.text = base if _reason_required() else f"{base} (optional for Admin)"
+
+
+def _safe_return(default):
+    """Only same-site contributor pages may be used as a return target."""
+    target = request.values.get("return_to", "")
+    if target.startswith("/contributors/") and not target.startswith("//") and "\\" not in target:
+        return target
+    return default
+
+
 def _txn_snapshot(txn):
     """The audit-relevant state of one contribution entry."""
     return {
@@ -199,6 +229,7 @@ def edit_transaction(txn_id):
         return redirect(url_for("collections.history", date=txn.date.isoformat()))
 
     form = EditTransactionForm()
+    _label_reason(form, "Reason for change")
     if request.method == "GET":
         form.contributor_name.data = txn.contributor.name
         form.date.data = txn.date
@@ -207,12 +238,16 @@ def edit_transaction(txn_id):
         form.note.data = txn.note or ""
 
     if form.validate_on_submit():
+        reason, reason_error = _checked_reason(form.reason.data)
         try:
             new_amount = parse_amount_ugx(form.amount.data)
             new_contributor = _active_contributor_by_name(form.contributor_name.data)
         except ValueError as exc:
-            flash(str(exc), "danger")
-            return render_template("collections/edit_transaction.html", form=form, txn=txn)
+            reason_error = reason_error or str(exc)
+        if reason_error:
+            flash(reason_error, "danger")
+            return render_template("collections/edit_transaction.html", form=form, txn=txn,
+                                   return_to=_safe_return(""), reason_required=_reason_required())
 
         new_date = form.date.data
         new_type = CollectionType[form.collection_type.data]
@@ -233,21 +268,23 @@ def edit_transaction(txn_id):
             apply_guarded_change([old_day, new_date], mutate)
         except CorrectionBlocked as exc:
             flash(str(exc), "danger")
-            return render_template("collections/edit_transaction.html", form=form, txn=txn)
+            return render_template("collections/edit_transaction.html", form=form, txn=txn,
+                                   return_to=_safe_return(""), reason_required=_reason_required())
 
         after = _txn_snapshot(txn)
         if after == before:
             flash("No changes were made.", "info")
-            return redirect(url_for("collections.history", date=txn.date.isoformat()))
+            return redirect(_safe_return(url_for("collections.history", date=txn.date.isoformat())))
 
-        log_audit("ContributionTransaction", txn.id, AuditAction.EDIT, before=before, after=after, reason=form.reason.data)
+        log_audit("ContributionTransaction", txn.id, AuditAction.EDIT, before=before, after=after, reason=reason)
         for day in {old_day, new_date}:
             refresh_daily_close(day, reason="Recalculated after contribution correction")
         db.session.commit()
         flash("Entry corrected. Totals and reports now reflect the change.", "success")
-        return redirect(url_for("collections.history", date=txn.date.isoformat()))
+        return redirect(_safe_return(url_for("collections.history", date=txn.date.isoformat())))
 
-    return render_template("collections/edit_transaction.html", form=form, txn=txn)
+    return render_template("collections/edit_transaction.html", form=form, txn=txn,
+                           return_to=_safe_return(""), reason_required=_reason_required())
 
 
 @collections_bp.route("/transactions/<int:txn_id>/void", methods=["GET", "POST"])
@@ -258,11 +295,17 @@ def void_transaction(txn_id):
     total, and kept in the audit log. It is never physically removed."""
     txn = db.session.get(ContributionTransaction, txn_id) or _abort404()
     form = VoidTransactionForm()
+    _label_reason(form, "Reason for deleting")
     if txn.status == TransactionStatus.VOID:
         flash("This entry is already deleted.", "info")
-        return redirect(url_for("collections.history", date=txn.date.isoformat()))
+        return redirect(_safe_return(url_for("collections.history", date=txn.date.isoformat())))
 
     if form.validate_on_submit():
+        reason, reason_error = _checked_reason(form.reason.data)
+        if reason_error:
+            flash(reason_error, "danger")
+            return render_template("collections/void_transaction.html", form=form, txn=txn,
+                                   return_to=_safe_return(""), reason_required=_reason_required())
         day = txn.date
         before = _txn_snapshot(txn)
 
@@ -270,22 +313,24 @@ def void_transaction(txn_id):
             txn.status = TransactionStatus.VOID
             txn.voided_by_id = current_user.id
             txn.voided_at = datetime.utcnow()
-            txn.void_reason = form.reason.data
+            txn.void_reason = reason
 
         try:
             apply_guarded_change([day], mutate)
         except CorrectionBlocked as exc:
             flash(str(exc), "danger")
-            return render_template("collections/void_transaction.html", form=form, txn=txn)
+            return render_template("collections/void_transaction.html", form=form, txn=txn,
+                                   return_to=_safe_return(""), reason_required=_reason_required())
 
         after = _txn_snapshot(txn)
-        log_audit("ContributionTransaction", txn.id, AuditAction.VOID, before=before, after=after, reason=form.reason.data)
+        log_audit("ContributionTransaction", txn.id, AuditAction.VOID, before=before, after=after, reason=reason)
         refresh_daily_close(day, reason="Recalculated after entry deleted")
         db.session.commit()
         flash("Entry deleted. It no longer counts in any total and remains in the audit log.", "success")
-        return redirect(url_for("collections.history", date=day.isoformat()))
+        return redirect(_safe_return(url_for("collections.history", date=day.isoformat())))
 
-    return render_template("collections/void_transaction.html", form=form, txn=txn)
+    return render_template("collections/void_transaction.html", form=form, txn=txn,
+                           return_to=_safe_return(""), reason_required=_reason_required())
 
 
 @collections_bp.route("/historical-entry", methods=["GET", "POST"])
