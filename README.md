@@ -251,9 +251,13 @@ differences, monthly/yearly aggregation, and role-based permissions.
 - Store backups off the VPS (e.g. encrypted, in a separate location).
   This is a financial accountability application - losing the database
   means losing contribution and banking history.
-- Test restores periodically:
+- Test restores periodically, into a disposable database - never your
+  production one. `scripts/restore-db.sh` works with or without
+  CloudPanel integration (it reads `POSTGRES_USER`/`POSTGRES_DB` from
+  `.env`) and refuses to run unless the target is empty/disposable or
+  `--force` is given:
   ```bash
-  cat backup_2026-01-01.sql | docker compose exec -T db psql -U <POSTGRES_USER> <POSTGRES_DB>
+  scripts/restore-db.sh backup_2026-01-01.sql
   ```
 
 ## VPS deployment (automated)
@@ -352,15 +356,23 @@ backup window, e.g. nightly at 02:00 if backups run at 02:30:
    preserves it (does not regenerate secrets) and reuses the restored
    `postgres/` and `uploads/` directories - it never overwrites an
    existing database, uploads, or secrets.
-3. Once the containers are healthy, restore the database from the dump
-   (safe even into the fresh, empty Postgres volume Postgres itself
-   just initialized - this is the documented procedure, not a raw copy
-   of `postgres/`):
+3. Once the containers are healthy, restore the database with
+   `scripts/restore-db.sh` (not a raw copy of `postgres/`, and not a
+   plain `psql` pipe - the installer already seeded a brand-new admin
+   user and a `CHIKUMI 100` contributor into this fresh database before
+   you get here, so importing the old dump directly would collide with
+   that seed; this script checks for exactly that known-safe baseline,
+   cleanly drops and recreates it, then restores):
    ```bash
-   cd /opt/spidqah-collections-app
-   gunzip -c /home/<cloudpanel-user>/spidqah-data/backups/spidqah_<timestamp>.sql.gz \
-     | docker compose exec -T db psql -U <POSTGRES_USER> <POSTGRES_DB>
+   sudo /opt/spidqah-collections-app/scripts/restore-db.sh \
+     /home/<cloudpanel-user>/spidqah-data/backups/spidqah_<timestamp>.sql.gz
    ```
+   It refuses (exit 1, nothing changed) if the database already holds
+   anything beyond that fresh seed - real users, contributors,
+   transactions, deposits, adjustments or reconciliations - so it can
+   never blindly import over, or silently overwrite, real financial
+   records. Pass `--force` only after you have independently confirmed
+   the target database is genuinely disposable.
 4. Log in with the original credentials and continue with the original
    financial records.
 

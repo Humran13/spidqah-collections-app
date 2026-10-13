@@ -217,12 +217,13 @@ else
   mkdir -p "$DATA_ROOT/postgres" "$DATA_ROOT/uploads" "$DATA_ROOT/backups" "$DATA_ROOT/config"
   chown -R "${CLOUDPANEL_USER}:${CLOUDPANEL_USER}" "$DATA_ROOT"
   chmod 750 "$DATA_ROOT" "$DATA_ROOT/postgres" "$DATA_ROOT/backups" "$DATA_ROOT/config"
-  # The web container runs as its own non-root image user (uid/gid created
-  # at image build time, unrelated to the CloudPanel site user's uid), so
-  # the uploads directory must stay writable by both. It is not under
-  # htdocs and is never served directly, so this is a deliberate trade-off,
-  # not an oversight.
-  chmod 777 "$DATA_ROOT/uploads"
+  # The web container's "appuser" is built with a fixed uid:gid (10001:10001,
+  # see Dockerfile) specifically so the uploads directory can be owned by it
+  # on the host and stay readable/writable by the app alone - no need for
+  # world-writable permissions. Root (this script, backups) can still access
+  # it regardless of ownership.
+  chown -R 10001:10001 "$DATA_ROOT/uploads"
+  chmod 700 "$DATA_ROOT/uploads"
 
   cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
 
