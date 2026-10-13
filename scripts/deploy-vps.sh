@@ -216,14 +216,12 @@ else
   log "Creating persistent storage under ${DATA_ROOT}..."
   mkdir -p "$DATA_ROOT/postgres" "$DATA_ROOT/uploads" "$DATA_ROOT/backups" "$DATA_ROOT/config"
   chown -R "${CLOUDPANEL_USER}:${CLOUDPANEL_USER}" "$DATA_ROOT"
-  chmod 750 "$DATA_ROOT" "$DATA_ROOT/postgres" "$DATA_ROOT/backups" "$DATA_ROOT/config"
-  # The web container's "appuser" is built with a fixed uid:gid (10001:10001,
-  # see Dockerfile) specifically so the uploads directory can be owned by it
-  # on the host and stay readable/writable by the app alone - no need for
-  # world-writable permissions. Root (this script, backups) can still access
-  # it regardless of ownership.
-  chown -R 10001:10001 "$DATA_ROOT/uploads"
-  chmod 700 "$DATA_ROOT/uploads"
+  chmod 750 "$DATA_ROOT" "$DATA_ROOT/postgres" "$DATA_ROOT/backups" "$DATA_ROOT/config" "$DATA_ROOT/uploads"
+  # Exact ownership of postgres/ and uploads/ (matching the postgres and web
+  # images' own runtime users, never a hardcoded uid/gid) is set in Phase D
+  # below, right after the images are built - see scripts/lib-permissions.sh.
+  # It also re-runs on every later invocation (updates, restarts), not just
+  # this first run.
 
   cp "$REPO_DIR/.env.example" "$REPO_DIR/.env"
 
@@ -291,7 +289,25 @@ HOST_UPLOADS_DIR="$(read_env_var HOST_UPLOADS_DIR)"
 HOST_BACKUPS_DIR="$(read_env_var HOST_BACKUPS_DIR)"
 CLOUDPANEL_DOMAIN="$(read_env_var CLOUDPANEL_DOMAIN)"
 
-eval "$COMPOSE up -d --build"
+eval "$COMPOSE build"
+
+# Correct ownership of the bind-mounted postgres/uploads directories using
+# the actual images just built, never a hardcoded uid/gid - runs on every
+# invocation (fresh install, update, restart), not just the first run, so
+# permission drift from an image change can't recur. See the previous
+# server-migration incident this is meant to prevent.
+if [ -n "$HOST_POSTGRES_DIR" ] || [ -n "$HOST_UPLOADS_DIR" ]; then
+  source "$REPO_DIR/scripts/lib-permissions.sh"
+  PG_IMAGE="$(eval "$COMPOSE config --images db")"
+  # "config --images web" can also list web's dependencies' images (e.g.
+  # db) depending on the compose version - exclude the already-known db
+  # image so WEB_IMAGE is never accidentally set to it.
+  WEB_IMAGE="$(eval "$COMPOSE config --images web" | grep -vF "$PG_IMAGE" | head -1)"
+  [ -n "$HOST_POSTGRES_DIR" ] && fix_postgres_permissions "$HOST_POSTGRES_DIR" "$PG_IMAGE"
+  [ -n "$HOST_UPLOADS_DIR" ] && fix_uploads_permissions "$HOST_UPLOADS_DIR" "$WEB_IMAGE"
+fi
+
+eval "$COMPOSE up -d"
 
 # ---------------------------------------------------------------------------
 # Phase E - wait for health

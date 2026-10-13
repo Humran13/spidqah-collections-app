@@ -233,6 +233,30 @@ correct fund, fund ownership surviving a cross-account deposit, voided
 transactions being excluded from totals, bank reconciliation
 differences, monthly/yearly aggregation, and role-based permissions.
 
+## Disaster recovery
+
+For the full one-command backup/restore workflow (new-VPS recovery and
+fixing a broken installation in place), written for a non-technical
+reader, see **[DISASTER_RECOVERY.md](DISASTER_RECOVERY.md)**. In short:
+
+```bash
+sudo scripts/backup-full.sh                      # daily, before your CloudPanel/rclone backup window
+sudo scripts/recover.sh --backup <file.tar.gz>    # one command to restore everything
+```
+
+`scripts/backup-full.sh` bundles a verified `pg_dump`, the uploads
+directory, `.env` secrets, and a checksummed manifest (record counts,
+PostgreSQL version, git commit) into one archive under
+`HOST_BACKUPS_DIR`. `scripts/recover.sh` validates that archive
+(checksums, PostgreSQL-version compatibility, disk space) before
+touching anything, delegates the database restore to the existing,
+unchanged `scripts/restore-db.sh` (same overwrite protection,
+atomicity and auto-recovery), restores uploads without ever deleting
+the previous copy, and re-applies correct PostgreSQL/uploads
+ownership using `scripts/lib-permissions.sh` - which detects the
+running images' actual uid/gid rather than a hardcoded one, so the
+permission problems from a past manual migration can't recur.
+
 ## Backup considerations
 
 - On a VPS installed via `scripts/deploy-vps.sh` with a CloudPanel
@@ -241,7 +265,8 @@ differences, monthly/yearly aggregation, and role-based permissions.
   CloudPanel/rclone backup workflow can cover them - see "CloudPanel
   persistent storage" above for exactly which paths to include and how
   to generate verified `pg_dump` output into `backups/` before each
-  backup run (`scripts/backup-db.sh`).
+  backup run (`scripts/backup-db.sh`, or the full
+  `scripts/backup-full.sh` - see "Disaster recovery" above).
 - Without CloudPanel integration (local development, or Docker run
   directly), the Postgres data lives in the named Docker volume
   `spidqah_postgres_data` instead. Back it up regularly, e.g.:
