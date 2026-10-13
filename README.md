@@ -120,7 +120,9 @@ Copy `.env.example` to `.env` and fill in real values. Never commit
 | `SESSION_COOKIE_SECURE` | Set to `true` once served over HTTPS |
 | `FIRST_ADMIN_USERNAME` / `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` | First Admin user, created automatically on container start if no matching active Admin exists yet |
 | `RATELIMIT_ENABLED` | Login rate limiting on/off |
-| `UPLOAD_DIR` | Persistent folder for Admin-uploaded files (PWA logo). Docker uses the `spidqah_uploads` volume. Never inside the git checkout |
+| `UPLOAD_DIR` | Persistent folder for Admin-uploaded files (PWA logo) **inside the container**. Docker uses the `spidqah_uploads` volume (or `HOST_UPLOADS_DIR`, see below) to persist it on the host. Never inside the git checkout |
+| `HOST_POSTGRES_DIR` / `HOST_UPLOADS_DIR` / `HOST_BACKUPS_DIR` | Optional. Absolute host paths to bind-mount for Postgres data / uploads / backups, set automatically by `scripts/deploy-vps.sh` under the CloudPanel site user's home directory (see "CloudPanel persistent storage" below). Leave unset for local development - Docker-managed named volumes are used instead |
+| `CLOUDPANEL_DOMAIN` / `CLOUDPANEL_USER` | Informational, set by `scripts/deploy-vps.sh`: the domain this instance serves and the CloudPanel Linux user that owns its persistent storage |
 
 ## Installable app (PWA), reports and corrections
 
@@ -233,8 +235,16 @@ differences, monthly/yearly aggregation, and role-based permissions.
 
 ## Backup considerations
 
-- The Postgres data lives in the named Docker volume
-  `spidqah_postgres_data`. Back it up regularly, e.g.:
+- On a VPS installed via `scripts/deploy-vps.sh` with a CloudPanel
+  domain, the Postgres data, uploads and secrets already live under
+  `/home/<cloudpanel-user>/spidqah-data/` so your existing
+  CloudPanel/rclone backup workflow can cover them - see "CloudPanel
+  persistent storage" above for exactly which paths to include and how
+  to generate verified `pg_dump` output into `backups/` before each
+  backup run (`scripts/backup-db.sh`).
+- Without CloudPanel integration (local development, or Docker run
+  directly), the Postgres data lives in the named Docker volume
+  `spidqah_postgres_data` instead. Back it up regularly, e.g.:
   ```bash
   docker compose exec db pg_dump -U <POSTGRES_USER> <POSTGRES_DB> > backup_$(date +%F).sql
   ```
@@ -249,10 +259,24 @@ differences, monthly/yearly aggregation, and role-based permissions.
 ## VPS deployment (automated)
 
 `scripts/deploy-vps.sh` is a single, idempotent, root-run script that
-deploys or updates SPIDQAH on a VPS with Docker already installed:
+deploys or updates SPIDQAH on a VPS with Docker and CloudPanel already
+installed:
 
 ```bash
-sudo /opt/spidqah-collections-app/scripts/deploy-vps.sh
+curl -fsSL https://raw.githubusercontent.com/Humran13/spidqah-collections-app/main/scripts/deploy-vps.sh | sudo bash
+```
+
+(or, once cloned: `sudo /opt/spidqah-collections-app/scripts/deploy-vps.sh`)
+
+**On first run only**, it asks for the domain or subdomain this
+instance will be served on (e.g. `col.example.com`) - create the
+CloudPanel website for that domain first. You can skip the interactive
+prompt by passing the domain as the first argument or in
+`CLOUDPANEL_DOMAIN`, e.g.:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Humran13/spidqah-collections-app/main/scripts/deploy-vps.sh -o install.sh
+sudo CLOUDPANEL_DOMAIN=col.example.com bash install.sh
 ```
 
 It clones (first run) or fast-forward-pulls `main` into
@@ -266,14 +290,86 @@ runs any global Docker cleanup, and it refuses to continue (with a
 clear error, no false "success") if a preflight or verification check
 fails. Re-running it later is the update procedure: it pulls the
 latest `main`, rebuilds, migrates, and restarts without ever resetting
-the database or regenerating secrets.
+the database, uploads, or secrets (and does not re-ask for the
+domain).
 
-After a successful run, remaining manual steps to go live:
+### CloudPanel persistent storage
 
-1. Point a CloudPanel site/reverse proxy at `127.0.0.1:8000` with HTTPS
-   (Let's Encrypt via CloudPanel) - not done by the script on purpose.
-2. Set a real, tested backup schedule for the Postgres volume (see
-   Backup considerations above).
+On first run, the installer looks up the CloudPanel website matching
+the domain you gave it under `/home/*/htdocs/<domain>`, determines its
+Linux user and home directory, and creates:
+
+```text
+/home/<cloudpanel-user>/
+├── htdocs/<domain>/              (CloudPanel's own site directory - untouched)
+└── spidqah-data/
+    ├── postgres/                 # Postgres data directory (bind mount)
+    ├── uploads/                  # Admin-uploaded files, e.g. PWA logo (bind mount)
+    ├── backups/                  # verified pg_dump output (see below)
+    └── config/.env               # the app's secrets (symlinked from
+                                   # /opt/spidqah-collections-app/.env)
+```
+
+`docker-compose.yml` reads `HOST_POSTGRES_DIR` / `HOST_UPLOADS_DIR` /
+`HOST_BACKUPS_DIR` from `.env` to bind-mount these directories; leaving
+them unset (the local-development default) falls back to plain
+Docker-managed named volumes as before. If no matching CloudPanel
+website is found for the domain, the installer fails with a clear
+error rather than guessing an owner.
+
+**CloudPanel/rclone backup coverage:** confirm with your own CloudPanel
+backup configuration whether it already includes the whole
+`/home/<cloudpanel-user>/` tree or only `htdocs/`. If it is scoped to
+`htdocs/` only, add
+`/home/<cloudpanel-user>/spidqah-data` as an extra path to back up -
+this is where the database, uploads and secrets now live. This change
+does not modify CloudPanel's own backup configuration.
+
+**PostgreSQL dumps:** `postgres/` is Postgres's live binary data
+directory - do not restore it by copying files directly. Instead,
+`scripts/backup-db.sh` produces a verified, gzip-compressed
+`pg_dump` into `backups/` (keeping the 14 most recent):
+
+```bash
+sudo /opt/spidqah-collections-app/scripts/backup-db.sh
+```
+
+Add it to root's crontab to run shortly before your CloudPanel/rclone
+backup window, e.g. nightly at 02:00 if backups run at 02:30:
+
+```
+0 2 * * * /opt/spidqah-collections-app/scripts/backup-db.sh >> /var/log/spidqah-backup.log 2>&1
+```
+
+### Restoring on a new VPS
+
+1. Restore `/home/<cloudpanel-user>/spidqah-data/` (uploads, config,
+   and a recent file from `backups/`) from your CloudPanel/rclone
+   backup onto the new VPS, under the matching CloudPanel user.
+2. Run the installer with the same domain:
+   `sudo CLOUDPANEL_DOMAIN=col.example.com /opt/spidqah-collections-app/scripts/deploy-vps.sh`.
+   Since `spidqah-data/config/.env` already exists, the installer
+   preserves it (does not regenerate secrets) and reuses the restored
+   `postgres/` and `uploads/` directories - it never overwrites an
+   existing database, uploads, or secrets.
+3. Once the containers are healthy, restore the database from the dump
+   (safe even into the fresh, empty Postgres volume Postgres itself
+   just initialized - this is the documented procedure, not a raw copy
+   of `postgres/`):
+   ```bash
+   cd /opt/spidqah-collections-app
+   gunzip -c /home/<cloudpanel-user>/spidqah-data/backups/spidqah_<timestamp>.sql.gz \
+     | docker compose exec -T db psql -U <POSTGRES_USER> <POSTGRES_DB>
+   ```
+4. Log in with the original credentials and continue with the original
+   financial records.
+
+After a successful first run, remaining manual steps to go live:
+
+1. Point the CloudPanel site at `127.0.0.1:8000` with a reverse proxy
+   and HTTPS (Let's Encrypt via CloudPanel) - not done by the script on
+   purpose.
+2. Add `scripts/backup-db.sh` to cron as shown above.
 3. Log in with the Admin credentials the script prints on first run,
    change the password immediately, then set the correct go-live date
    under Admin -> Settings and bank account opening balances under

@@ -7,7 +7,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spidqah}
       POSTGRES_DB: ${POSTGRES_DB:-spidqah}
     volumes:
-      - spidqah_postgres_data:/var/lib/postgresql/data
+      # HOST_POSTGRES_DIR (set in .env by scripts/deploy-vps.sh when a
+      # CloudPanel domain is detected) bind-mounts persistent storage under
+      # the CloudPanel site user's home directory. Left unset, this falls
+      # back to the plain Docker-managed named volume (local/dev default).
+      - ${HOST_POSTGRES_DIR:-spidqah_postgres_data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spidqah} -d ${POSTGRES_DB:-spidqah}"]
       interval: 5s
@@ -25,7 +29,8 @@ services:
       UPLOAD_DIR: /app/instance/uploads
     volumes:
       # Admin-uploaded files (PWA logo). Persists across rebuilds and restarts.
-      - spidqah_uploads:/app/instance/uploads
+      # HOST_UPLOADS_DIR works the same way as HOST_POSTGRES_DIR above.
+      - ${HOST_UPLOADS_DIR:-spidqah_uploads}:/app/instance/uploads
     ports:
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:5000"
     depends_on:
